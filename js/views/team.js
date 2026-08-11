@@ -1,14 +1,16 @@
 // Manager Team view: every tech's van, live-ish. Read-only.
 import { fetchTeam, cachedTeam, removeTech } from '../sync.js';
+import { allRequests, decideRequest } from '../requests.js';
 import { aggregateTeamItems } from '../analytics.js';
 import { exportTeamXlsx } from '../export.js';
-import { esc, fmtQty, toast, confirmDialog } from '../ui.js';
+import { esc, fmtQty, fmtDateTime, toast, confirmDialog, sheet } from '../ui.js';
 import * as nav from '../nav.js';
 
 const section = () => document.getElementById('screen-team');
 
 let data = null;      // { team, cached, at }
-let tab = 'vans';     // 'vans' | 'all'
+let requests = [];    // manager request inbox
+let tab = 'vans';     // 'vans' | 'all' | 'requests'
 let openTechId = null;
 let query = '';
 
@@ -84,6 +86,108 @@ function allStock() {
       </div>`).join('') || '<div class="empty">No synced stock yet — techs appear here after their first sync.</div>'}`;
 }
 
+function pendingCount() {
+  return requests.filter(r => r.status === 'pending').length;
+}
+
+const STATUS_LABEL = { approved: '✅ approved', applied: '✅ approved', rejected: '✖ rejected', closed: '✖ rejected' };
+
+function requestsList() {
+  const pending = requests.filter(r => r.status === 'pending');
+  const decided = requests.filter(r => r.status !== 'pending');
+  const detailLine = (p) => [
+    p.barcode ? `barcode ${p.barcode}` : 'no barcode',
+    p.qty ? `qty ${fmtQty(p.qty)}` : null,
+    p.minQty ? `min ${fmtQty(p.minQty)}` : null,
+    p.unit, p.category, p.location,
+  ].filter(Boolean).join(' · ');
+  return `
+    ${pending.length ? pending.map(r => `
+      <div class="item-row" data-req="${r.id}">
+        <div class="item-main">
+          <div class="item-name">${esc(r.payload.name)}</div>
+          <div class="item-sub">${esc(r.techName)} · ${fmtDateTime(new Date(r.createdAt).getTime())}<br>${esc(detailLine(r.payload))}</div>
+          ${r.payload.notes ? `<div class="item-sub">“${esc(r.payload.notes)}”</div>` : ''}
+        </div>
+        <button class="btn btn-sm btn-primary" data-review>Review</button>
+      </div>`).join('') : '<div class="empty">No pending requests. Techs can request new items from their Add button or by scanning an unknown barcode.</div>'}
+    ${decided.length ? `
+      <div class="section-title" style="margin-top:18px">Recently decided</div>
+      ${decided.slice(0, 20).map(r => `
+        <div class="rev-row">
+          <div class="rev-main"><div>${esc(r.payload.name)}</div><div class="txn-sub">${esc(r.techName)}${r.target === 'team' ? ' → whole team' : ''}${r.managerNote ? ' · ' + esc(r.managerNote) : ''}</div></div>
+          <div class="rev-nums txn-sub">${STATUS_LABEL[r.status] || r.status}</div>
+        </div>`).join('')}` : ''}`;
+}
+
+function openReviewSheet(r) {
+  const p = r.payload;
+  const f = (label, key, val, attrs = '') => `
+    <div class="field"><label>${label}</label><input type="text" data-rf="${key}" value="${esc(val ?? '')}" ${attrs} autocomplete="off"></div>`;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <p style="color:var(--text-dim);font-size:13.5px;margin-bottom:12px">Requested by <b>${esc(r.techName)}</b> · ${fmtDateTime(new Date(r.createdAt).getTime())}</p>
+    ${f('Name *', 'name', p.name)}
+    ${f('Barcode', 'barcode', p.barcode, 'inputmode="numeric"')}
+    <div class="field-row">
+      ${f('Starting qty', 'qty', fmtQty(p.qty || 0), 'inputmode="decimal"')}
+      ${f('Min stock', 'minQty', fmtQty(p.minQty || 0), 'inputmode="decimal"')}
+    </div>
+    <div class="field-row">
+      ${f('Unit', 'unit', p.unit || 'pcs')}
+      ${f('Category', 'category', p.category)}
+    </div>
+    <div class="field-row">
+      ${f('Location', 'location', p.location)}
+      ${f('Cost per unit ($)', 'cost', p.cost ?? '', 'inputmode="decimal" placeholder="optional"')}
+    </div>
+    ${f('Note to tech (optional)', '_note', '', 'placeholder="e.g. use the 22mm ones we stock"')}
+    <div class="field">
+      <label>Add for</label>
+      <div class="seg seg-page">
+        <button type="button" data-target="tech" class="on">Just ${esc(r.techName)}</button>
+        <button type="button" data-target="team">Whole team</button>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="btn" data-rejectbtn style="color:var(--danger)">Reject</button>
+      <button type="button" class="btn btn-primary" data-approvebtn>Approve</button>
+    </div>`;
+  const s = sheet({ title: 'Review request', content: wrap });
+  let target = 'tech';
+  wrap.querySelectorAll('[data-target]').forEach(b => b.addEventListener('click', () => {
+    target = b.dataset.target;
+    wrap.querySelectorAll('[data-target]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  const readPayload = () => {
+    const out = {};
+    wrap.querySelectorAll('[data-rf]').forEach(i => { if (i.dataset.rf !== '_note') out[i.dataset.rf] = i.value; });
+    return out;
+  };
+  const decide = async (approve) => {
+    const payload = readPayload();
+    if (approve && !payload.name.trim()) { toast('Name is required', { error: true }); return; }
+    const note = wrap.querySelector('[data-rf="_note"]').value.trim();
+    try {
+      await decideRequest(r.id, { approve, payload, target, note });
+      s.close();
+      toast(approve ? `Approved — ${target === 'team' ? 'whole team gets' : `${r.techName} gets`} "${payload.name.trim()}"` : 'Request rejected', { duration: 3600 });
+      await loadRequests();
+      render();
+    } catch (e) {
+      toast(e.message, { error: true });
+      await loadRequests();
+      render();
+    }
+  };
+  wrap.querySelector('[data-approvebtn]').addEventListener('click', () => decide(true));
+  wrap.querySelector('[data-rejectbtn]').addEventListener('click', () => decide(false));
+}
+
+async function loadRequests() {
+  try { requests = await allRequests(); } catch { /* keep whatever we had */ }
+}
+
 async function render() {
   const sec = section();
   if (!data) {
@@ -113,11 +217,12 @@ async function render() {
         <div class="seg seg-page">
           <button data-tab="vans" class="${tab === 'vans' ? 'on' : ''}">Vans</button>
           <button data-tab="all" class="${tab === 'all' ? 'on' : ''}">All stock</button>
+          <button data-tab="requests" class="${tab === 'requests' ? 'on' : ''}">Requests${pendingCount() ? ` (${pendingCount()})` : ''}</button>
         </div>
       </div>`}
     <div class="content" data-body>
       ${data.cached ? '<div class="banner">⚠ Could not reach the sync server — this is the last known state.</div>' : ''}
-      ${tech ? techDetail(tech) : (tab === 'vans'
+      ${tech ? techDetail(tech) : tab === 'requests' ? requestsList() : (tab === 'vans'
         ? (data.team.map(techCard).join('') || '<div class="empty">No techs have synced yet.<br>Each tech enters the team code + their name in Settings → Team sync.</div>')
         : allStock())}
     </div>
@@ -138,6 +243,13 @@ async function render() {
   sec.querySelector('[data-insights]').addEventListener('click', () => nav.show('insights', { scope: 'team' }));
 
   sec.querySelector('[data-body]').addEventListener('click', (e) => {
+    const reviewBtn = e.target.closest('[data-review]');
+    if (reviewBtn) {
+      const id = reviewBtn.closest('[data-req]').dataset.req;
+      const r = requests.find(x => x.id === id);
+      if (r) openReviewSheet(r);
+      return;
+    }
     const card = e.target.closest('[data-tech]');
     if (card) { openTechId = card.dataset.tech; query = ''; render(); }
   });
@@ -168,22 +280,24 @@ async function load(force = false) {
     const c = await cachedTeam();
     if (c) { data = c; render(); }
   }
-  try {
-    data = await fetchTeam();
-  } catch (e) {
-    if (!data) { toast(e.message, { error: true }); nav.back(); return; }
+  const [teamResult] = await Promise.allSettled([fetchTeam(), loadRequests()]);
+  if (teamResult.status === 'fulfilled') {
+    data = teamResult.value;
+  } else {
+    if (!data) { toast(teamResult.reason.message, { error: true }); nav.back(); return; }
     data = { ...data, cached: true };
-    toast(e.message, { error: true });
+    toast(teamResult.reason.message, { error: true });
   }
   render();
 }
 
 export default {
-  async show() {
-    tab = 'vans';
+  async show(params = {}) {
+    tab = params.tab === 'requests' ? 'requests' : 'vans';
     openTechId = null;
     query = '';
     data = null;
+    requests = [];
     render();
     await load();
   },

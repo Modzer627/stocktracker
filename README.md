@@ -34,6 +34,28 @@ pinned in barcode-detector's package.json). Update them **together** or
 decoding breaks. SheetJS lives at `vendor/sheetjs/xlsx.full.min.js` (0.20.3,
 from cdn.sheetjs.com — the npm copy is stale).
 
+## Roles (v1.2)
+
+- **Manager code** entered → full control: create items directly, Team view,
+  Requests inbox (approve/reject tech item requests, optionally for the whole
+  team), team analytics.
+- **Team code only** (tech) → normal daily use, but *new items* go through a
+  request: the Add button and unknown-barcode scans open a "Request new item"
+  form; the manager decides; approved items appear on the tech's phone
+  automatically (they also pull on every app open).
+- **No codes** (solo) → the app behaves like v1.0: full local control.
+
+Note: the gate is a workflow rule enforced in the app, not a security boundary —
+snapshots are opaque to the server.
+
+## Notifications (v1.2)
+
+Web Push via the Worker (VAPID keys in Worker secrets, public key baked into
+`js/push.js`). Managers get "new request" pushes; techs get decision pushes.
+Enabled per-device in Settings → Notifications (iPhone: app must be installed
+to the home screen first). The SW always shows a notification for every push —
+iOS revokes permission for silent pushes.
+
 ## Data safety
 
 Local-only storage means: deleting the home-screen app (or losing the phone)

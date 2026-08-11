@@ -1,6 +1,6 @@
 // Offline cache. DEPLOY RITUAL: bump VERSION on every deploy — it is what
 // makes phones pick up new files. Add any new file to ASSETS.
-const VERSION = 'v1.1.1';
+const VERSION = 'v1.2.0';
 const CACHE = `stocktracker-${VERSION}`;
 
 const ASSETS = [
@@ -21,6 +21,8 @@ const ASSETS = [
   './js/sync.js',
   './js/analytics.js',
   './js/charts.js',
+  './js/requests.js',
+  './js/push.js',
   './js/views/home.js',
   './js/views/scan.js',
   './js/views/item.js',
@@ -52,6 +54,27 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('message', (e) => {
   if (e.data === 'skipWaiting') self.skipWaiting();
+});
+
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data.json(); } catch { data = { body: e.data && e.data.text() }; }
+  // iOS revokes push permission if a push arrives without a visible notification.
+  e.waitUntil(self.registration.showNotification(data.title || 'Stock Tracker', {
+    body: data.body || '',
+    tag: data.tag || undefined,
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    data: { url: './' },
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) if ('focus' in c) return c.focus();
+    return self.clients.openWindow('./');
+  }));
 });
 
 self.addEventListener('fetch', (e) => {

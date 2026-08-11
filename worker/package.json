@@ -1,0 +1,8 @@
+{
+  "name": "stocktracker-sync",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@block65/webcrypto-web-push": "^1.0.2"
+  }
+}

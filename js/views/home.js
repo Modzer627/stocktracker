@@ -67,7 +67,7 @@ async function render() {
     <header class="hdr">
       <h1>Stock Tracker</h1>
       <button class="icon-btn" data-insights aria-label="Insights">📈</button>
-      ${showTeam ? '<button class="icon-btn" data-team aria-label="Team">👥</button>' : ''}
+      ${showTeam ? '<button class="icon-btn" data-team aria-label="Team" style="position:relative">👥<span class="req-dot" data-reqdot hidden></span></button>' : ''}
       <button class="icon-btn" data-settings aria-label="Settings">⚙︎</button>
     </header>
     <div class="content">
@@ -105,11 +105,24 @@ function wire(sec, items) {
   sec.querySelector('[data-insights]').addEventListener('click', () => nav.show('insights'));
   sec.querySelector('[data-team]')?.addEventListener('click', () => nav.show('team'));
   sec.querySelector('[data-scan]').addEventListener('click', () => nav.show('scan'));
-  sec.querySelector('[data-add]').addEventListener('click', () => openItemForm({ onSaved: (it) => { if (it) render(); } }));
+  sec.querySelector('[data-add]').addEventListener('click', async () => {
+    const { appRole } = await import('../requests.js');
+    const role = await appRole();
+    openItemForm({ mode: role === 'tech' ? 'request' : 'create', onSaved: (it) => { if (it) render(); } });
+  });
   sec.querySelector('[data-stocktake]').addEventListener('click', () => nav.show('stocktake'));
   sec.querySelector('[data-export]').addEventListener('click', openExportSheet);
 
   sec.querySelector('[data-update]')?.addEventListener('click', () => window.__applyUpdate && window.__applyUpdate());
+  if (sec.querySelector('[data-team]')) {
+    import('../requests.js').then(async ({ allRequests }) => {
+      try {
+        const pending = (await allRequests()).filter(r => r.status === 'pending').length;
+        const dot = sec.querySelector('[data-reqdot]');
+        if (dot && pending) { dot.hidden = false; dot.textContent = pending; }
+      } catch { /* offline — badge just stays hidden */ }
+    });
+  }
   sec.querySelector('[data-resume-st]')?.addEventListener('click', () => nav.show('stocktake'));
   sec.querySelector('[data-backup]')?.addEventListener('click', async () => {
     const r = await exportBackup();

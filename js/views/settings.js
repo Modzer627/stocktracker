@@ -73,6 +73,15 @@ async function render() {
         </div>
       </div>
 
+      <div class="section-title">Notifications</div>
+      <div class="set-group">
+        <div class="set-row">
+          <div class="grow"><span data-pushline>Checking…</span><span class="hint">Managers: new requests · Techs: request decisions</span></div>
+          <button class="btn btn-sm btn-primary" data-pushenable hidden>Turn on</button>
+          <button class="btn btn-sm" data-pushtest hidden>Test</button>
+        </div>
+      </div>
+
       <div class="section-title">Your data</div>
       <div class="set-group">
         <div class="set-row">
@@ -154,6 +163,45 @@ async function render() {
       toast('Manager code accepted — Team view unlocked');
     } catch (err) {
       toast(err.message, { error: true });
+    }
+  });
+
+  // --- notifications wiring ---
+  const pushLine = sec.querySelector('[data-pushline]');
+  const pushEnableBtn = sec.querySelector('[data-pushenable]');
+  const pushTestBtn = sec.querySelector('[data-pushtest]');
+  const refreshPushRow = async () => {
+    const { pushState } = await import('../push.js');
+    const state = await pushState();
+    pushLine.textContent = {
+      unsupported: /iPhone|iPad/.test(navigator.userAgent) && !window.navigator.standalone
+        ? 'Install to the home screen first, then notifications work'
+        : 'Notifications not supported in this browser',
+      denied: 'Blocked — allow notifications for this app in phone settings',
+      off: 'Notifications off',
+      on: 'Notifications on ✓',
+    }[state];
+    pushEnableBtn.hidden = state !== 'off';
+    pushTestBtn.hidden = state !== 'on';
+  };
+  refreshPushRow();
+  pushEnableBtn.addEventListener('click', async () => {
+    try {
+      const { enableNotifications } = await import('../push.js');
+      await enableNotifications();
+      toast('Notifications on');
+    } catch (e) {
+      toast(e.message, { error: true, duration: 5000 });
+    }
+    refreshPushRow();
+  });
+  pushTestBtn.addEventListener('click', async () => {
+    try {
+      const { sendTestNotification } = await import('../push.js');
+      await sendTestNotification();
+      toast('Test sent — it should pop up in a few seconds');
+    } catch (e) {
+      toast(e.message, { error: true });
     }
   });
 

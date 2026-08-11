@@ -287,6 +287,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .confirm-box { text-align: center; padding: 6px 4px 2px; }
 .confirm-box p { margin-bottom: 18px; font-size: 15.5px; line-height: 1.5; }
 
+/* ---------- pending-request badge on the Team button ---------- */
+.req-dot {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+
 /* ---------- insights: stat tiles ---------- */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }

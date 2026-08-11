@@ -11,7 +11,7 @@ import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
 import { initSync } from './sync.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;
@@ -40,6 +40,28 @@ async function boot() {
   await nav.show('home');
 
   initSync();
+
+  // Keep the push subscription registered (iOS drops them silently).
+  import('./push.js').then(m => m.resyncSubscription()).catch(() => {});
+
+  // Techs: pull manager decisions on open — approved items get created locally.
+  (async () => {
+    const { appRole, applyDecisions, dismissRejected } = await import('./requests.js');
+    const role = await appRole();
+    if (role === 'solo') return;
+    try {
+      const { applied, rejected } = await applyDecisions();
+      if (applied.length) {
+        toast(`Manager approved: ${applied.join(', ')} — added to your inventory`, { duration: 5000 });
+        homeView.refresh();
+      }
+      for (const r of rejected) {
+        toast(`Request rejected: ${r.name}${r.note ? ' — ' + r.note : ''}`, {
+          error: true, actionLabel: 'OK', action: () => dismissRejected(r.id), duration: 8000,
+        });
+      }
+    } catch { /* offline — will retry next open */ }
+  })();
 
   // First user gesture unlocks WebAudio so scan beeps work on iOS.
   document.addEventListener('pointerdown', unlockAudio, { once: true });

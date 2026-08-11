@@ -18,6 +18,7 @@ let session = null;
 let lastItem = null;
 let wakeLock = null;
 let visHandler = null;
+let role = 'solo'; // resolved on show(); techs request instead of create
 
 const MODE_LABELS = { in: 'Stock In', out: 'Stock Out', lookup: 'Lookup' };
 
@@ -118,12 +119,28 @@ function updateTorchButton() {
   if (btn) { btn.hidden = !scanner.hasTorch(); btn.classList.remove('on'); }
 }
 
+function requestUnknown(code) {
+  withPausedScanner(done => openItemForm({
+    mode: 'request',
+    prefill: { barcode: code, qty: 0 },
+    onSaved: () => done(),
+    onRequested: () => done(),
+  }));
+}
+
 async function handleCode(code) {
   const item = await getByBarcode(code);
 
   if (countMode) {
     if (!item) {
       feedback(false);
+      if (role === 'tech') {
+        toast(`Unknown barcode — new items need manager approval`, {
+          actionLabel: 'Request',
+          action: () => requestUnknown(code),
+        });
+        return;
+      }
       toast(`Unknown barcode ${code}`, {
         actionLabel: 'Add item',
         action: () => withPausedScanner(done => openItemForm({
@@ -159,6 +176,7 @@ async function handleCode(code) {
   if (mode === 'in') {
     if (!item) {
       feedback(false);
+      if (role === 'tech') { requestUnknown(code); return; }
       withPausedScanner(done => openItemForm({
         prefill: { barcode: code, qty: 1 },
         onSaved: (created) => {
@@ -178,6 +196,13 @@ async function handleCode(code) {
   if (mode === 'out') {
     if (!item) {
       feedback(false);
+      if (role === 'tech') {
+        toast(`Not in your inventory — new items need manager approval`, {
+          actionLabel: 'Request',
+          action: () => requestUnknown(code),
+        });
+        return;
+      }
       toast(`Barcode ${code} is not in your inventory`, {
         actionLabel: 'Add item',
         action: () => withPausedScanner(done => openItemForm({ prefill: { barcode: code, qty: 0 }, onSaved: () => done() })),
@@ -268,6 +293,7 @@ export default {
     countMode = params.mode === 'count';
     session = countMode ? await getSession() : null;
     if (countMode && !session) { toast('No stocktake in progress', { error: true }); nav.back(); return; }
+    role = (await import('../requests.js').then(m => m.appRole()).catch(() => 'solo'));
     mode = countMode ? 'in' : await metaGet('lastScanMode', 'in');
     if (!MODE_LABELS[mode]) mode = 'in';
     lastItem = null;

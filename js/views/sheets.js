@@ -93,11 +93,14 @@ export function openQtySheet({ title, okLabel = 'Save', initial = 1, onDone }) {
 const UNIT_SUGGESTIONS = ['pcs', 'box', 'pack', 'm', 'cm', 'L', 'mL', 'kg', 'g', 'roll', 'tube', 'bag', 'set'];
 
 /**
- * Item form (create or edit) as a sheet.
- * opts: { item (edit mode), prefill {barcode, ...}, onSaved(item) }
+ * Item form as a sheet. Modes: create (default), edit (pass `item`), or
+ * mode:'request' — same fields, but submits an approval request to the manager
+ * instead of creating the item locally.
+ * opts: { item, prefill {barcode, ...}, mode, onSaved(itemOrNull), onRequested(id) }
  */
-export async function openItemForm({ item = null, prefill = {}, onSaved = null } = {}) {
+export async function openItemForm({ item = null, prefill = {}, mode = 'create', onSaved = null, onRequested = null } = {}) {
   const editing = !!item;
+  const requesting = mode === 'request' && !editing;
   const v = (f, d = '') => esc(editing ? (item[f] ?? d) : (prefill[f] ?? d));
   const items = await allItems();
   const cats = distinct(items, 'category');
@@ -116,7 +119,7 @@ export async function openItemForm({ item = null, prefill = {}, onSaved = null }
     </div>
     <div class="field-row">
       <div class="field">
-        <label>${editing ? 'Quantity (use Adjust to change)' : 'Starting quantity'}</label>
+        <label>${editing ? 'Quantity (use Adjust to change)' : requesting ? 'Starting quantity (requested)' : 'Starting quantity'}</label>
         <input type="text" data-f="qty" value="${editing ? esc(fmtQty(item.qty)) : esc(fmtQty(prefill.qty ?? 0))}" inputmode="decimal" ${editing ? 'disabled' : ''}>
       </div>
       <div class="field">
@@ -151,12 +154,13 @@ export async function openItemForm({ item = null, prefill = {}, onSaved = null }
       <label>Notes</label>
       <textarea data-f="notes">${v('notes')}</textarea>
     </div>
+    ${requesting ? `<p style="color:var(--text-dim);font-size:13px;line-height:1.5;margin:-4px 0 12px">New items need manager approval — this sends the details to your manager. You'll get a notification when it's decided.</p>` : ''}
     <div class="sheet-actions">
       <button type="button" class="btn" data-cancel>Cancel</button>
-      <button type="button" class="btn btn-primary" data-ok>${editing ? 'Save changes' : 'Add item'}</button>
+      <button type="button" class="btn btn-primary" data-ok>${editing ? 'Save changes' : requesting ? 'Send request' : 'Add item'}</button>
     </div>`;
 
-  const s = sheet({ title: editing ? 'Edit item' : 'New item', content: wrap, onClose: () => onSaved && onSaved(null) });
+  const s = sheet({ title: editing ? 'Edit item' : requesting ? 'Request new item' : 'New item', content: wrap, onClose: () => onSaved && onSaved(null) });
   const read = () => {
     const out = {};
     wrap.querySelectorAll('[data-f]').forEach(i => { out[i.dataset.f] = i.value; });
@@ -167,6 +171,15 @@ export async function openItemForm({ item = null, prefill = {}, onSaved = null }
     const data = read();
     if (!data.name.trim()) { toast('Name is required', { error: true }); return; }
     try {
+      if (requesting) {
+        const { submitRequest } = await import('../requests.js');
+        const id = await submitRequest({ ...data, qty: Number(String(data.qty).replace(',', '.')) || 0 });
+        const reqCb = onRequested; onRequested = null; onSaved = null;
+        s.close();
+        toast(`Request sent — your manager will review "${data.name.trim()}"`, { duration: 4200 });
+        if (reqCb) reqCb(id);
+        return;
+      }
       let saved;
       if (editing) {
         delete data.qty; // qty only changes through movements
