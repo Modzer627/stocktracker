@@ -90,7 +90,7 @@ export default {
         status: 204,
         headers: {
           ...cors,
-          'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+          'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
           'Access-Control-Allow-Headers': req.headers.get('Access-Control-Request-Headers') || `${AUTH_HEADER},Content-Type`,
           'Access-Control-Max-Age': '86400',
         },
@@ -319,6 +319,38 @@ export default {
         return json({ ok: true }, 200, cors);
       }
 
+      /* ---------- item photos (stored base64 in D1 — no extra services) ---------- */
+
+      const photoMatch = url.pathname.match(/^\/v1\/photo\/([\w.-]{4,80})$/);
+      if (photoMatch) {
+        const key = photoMatch[1];
+        const manager = await isManager();
+        if (!manager && !(await isTeam())) return json({ error: 'unauthorized' }, 401, cors);
+
+        if (req.method === 'GET') {
+          const row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?1').bind(key).first();
+          if (!row) return json({ error: 'not found' }, 404, cors);
+          return new Response(b64ToBytes(row.data), {
+            status: 200,
+            headers: { ...cors, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' },
+          });
+        }
+        if (req.method === 'PUT') {
+          const buf = await req.arrayBuffer();
+          if (buf.byteLength < 100) return json({ error: 'empty image' }, 400, cors);
+          if (buf.byteLength > 500_000) return json({ error: 'photo too large' }, 413, cors);
+          await env.DB.prepare(
+            `INSERT INTO photos (key, data, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET data = ?2, updated_at = ?3`
+          ).bind(key, bytesToB64(buf), new Date().toISOString()).run();
+          return json({ ok: true, bytes: buf.byteLength }, 200, cors);
+        }
+        if (req.method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM photos WHERE key = ?1').bind(key).run();
+          return json({ ok: true }, 200, cors);
+        }
+      }
+
       /* ---------- push ---------- */
 
       if (url.pathname === '/v1/push/subscribe' && req.method === 'POST') {
@@ -350,6 +382,20 @@ export default {
     }
   },
 };
+
+function bytesToB64(buf) {
+  const u8 = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
 
 function rowToReq(r) {
   let payload;

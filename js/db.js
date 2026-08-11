@@ -1,6 +1,6 @@
 // IndexedDB layer: stores `items`, `txns` (movement log), `meta` (key/value).
 const DB_NAME = 'stocktracker';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2: adds the local photo cache store
 
 let _db = null;
 
@@ -39,6 +39,9 @@ function openOnce() {
       }
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('photos')) {
+        db.createObjectStore('photos', { keyPath: 'key' }); // {key, blob, ts}
       }
     };
     req.onsuccess = () => resolve(req.result);

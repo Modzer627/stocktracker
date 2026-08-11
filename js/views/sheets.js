@@ -154,6 +154,16 @@ export async function openItemForm({ item = null, prefill = {}, mode = 'create',
       <label>Notes</label>
       <textarea data-f="notes">${v('notes')}</textarea>
     </div>
+    ${requesting ? '' : `
+    <div class="field">
+      <label>Photo</label>
+      <div class="photo-row">
+        <div class="thumb thumb-lg" data-form-thumb ${editing && item.photo ? `data-photo-key="${esc(item.photo)}"` : ''}>📷</div>
+        <button type="button" class="btn btn-sm" data-photo-pick>${editing && item.photo ? 'Replace' : 'Add photo'}</button>
+        <button type="button" class="btn btn-sm" data-photo-remove ${editing && item.photo ? '' : 'hidden'} style="color:var(--danger)">Remove</button>
+        <input type="file" accept="image/*" capture="environment" data-photo-file hidden>
+      </div>
+    </div>`}
     ${requesting ? `<p style="color:var(--text-dim);font-size:13px;line-height:1.5;margin:-4px 0 12px">New items need manager approval — this sends the details to your manager. You'll get a notification when it's decided.</p>` : ''}
     <div class="sheet-actions">
       <button type="button" class="btn" data-cancel>Cancel</button>
@@ -166,6 +176,46 @@ export async function openItemForm({ item = null, prefill = {}, mode = 'create',
     wrap.querySelectorAll('[data-f]').forEach(i => { out[i.dataset.f] = i.value; });
     return out;
   };
+
+  // photo staging (create + edit; not shown for requests)
+  let stagedPhotoFile = null;
+  let photoRemoved = false;
+  const photoFileInput = wrap.querySelector('[data-photo-file]');
+  if (photoFileInput) {
+    import('../photos.js').then(({ hydrateThumbs }) => hydrateThumbs(wrap));
+    wrap.querySelector('[data-photo-pick]').addEventListener('click', () => photoFileInput.click());
+    photoFileInput.addEventListener('change', () => {
+      const f = photoFileInput.files[0];
+      photoFileInput.value = '';
+      if (!f) return;
+      stagedPhotoFile = f;
+      photoRemoved = false;
+      const thumb = wrap.querySelector('[data-form-thumb]');
+      const url = URL.createObjectURL(f);
+      thumb.style.backgroundImage = `url("${url}")`;
+      thumb.classList.add('has-img');
+      wrap.querySelector('[data-photo-remove]').hidden = false;
+    });
+    wrap.querySelector('[data-photo-remove]').addEventListener('click', () => {
+      stagedPhotoFile = null;
+      photoRemoved = true;
+      const thumb = wrap.querySelector('[data-form-thumb]');
+      thumb.style.backgroundImage = '';
+      thumb.classList.remove('has-img');
+      wrap.querySelector('[data-photo-remove]').hidden = true;
+    });
+  }
+  const applyStagedPhoto = async (saved) => {
+    if (!photoFileInput) return;
+    try {
+      const photos = await import('../photos.js');
+      if (stagedPhotoFile) await photos.setItemPhoto(saved, stagedPhotoFile);
+      else if (photoRemoved && saved.photo) await photos.removeItemPhoto(saved);
+    } catch (e) {
+      toast(e.message || 'Photo could not be saved', { error: true });
+    }
+  };
+
   wrap.querySelector('[data-cancel]').addEventListener('click', () => s.close());
   wrap.querySelector('[data-ok]').addEventListener('click', async () => {
     const data = read();
@@ -183,10 +233,12 @@ export async function openItemForm({ item = null, prefill = {}, mode = 'create',
       let saved;
       if (editing) {
         delete data.qty; // qty only changes through movements
+        data.photo = item.photo || ''; // preserved unless the photo controls changed it
         saved = await updateItem(item.id, data);
       } else {
         saved = await createItem(data);
       }
+      await applyStagedPhoto(saved);
       const doneCb = onSaved; onSaved = null;
       s.close();
       toast(editing ? 'Saved' : `Added ${saved.name}`);

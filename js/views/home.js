@@ -22,6 +22,7 @@ function rowHTML(item) {
   if (item.minQty > 0) subBits.push(`min ${fmtQty(item.minQty)}`);
   return `
     <div class="item-row${low ? ' low' : ''}" data-id="${item.id}">
+      ${item.photo ? `<div class="thumb" data-photo-key="${esc(item.photo)}"></div>` : ''}
       <div class="item-main">
         <div class="item-name">${esc(item.name)}</div>
         <div class="item-sub">${subBits.join(' · ') || '&nbsp;'}</div>
@@ -92,6 +93,7 @@ async function render() {
     </div>`;
 
   wire(sec, items);
+  if (items.some(i => i.photo)) import('../photos.js').then(({ hydrateThumbs }) => hydrateThumbs(sec));
 }
 
 function wire(sec, items) {

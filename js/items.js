@@ -16,6 +16,8 @@ function normalize(data) {
   if (barcode) item.barcode = barcode; // omitted entirely when absent → stays out of the unique index
   const cost = parseFloat(String(data.cost ?? '').replace(',', '.'));
   if (!Number.isNaN(cost) && cost > 0) item.cost = Math.round(cost * 100) / 100;
+  const photo = (data.photo || '').trim();
+  if (photo) item.photo = photo;
   return item;
 }
 
@@ -45,6 +47,7 @@ export async function updateItem(id, patch) {
   const item = { ...existing, ...clean, id, updatedAt: now() };
   if (!('barcode' in clean)) delete item.barcode;
   if (!('cost' in clean)) delete item.cost;
+  if (!('photo' in clean)) delete item.photo;
   try {
     await dbPut('items', item);
   } catch (e) {

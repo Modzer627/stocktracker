@@ -11,7 +11,7 @@ import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
 import { initSync } from './sync.js';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;
@@ -43,6 +43,12 @@ async function boot() {
 
   // Keep the push subscription registered (iOS drops them silently).
   import('./push.js').then(m => m.resyncSubscription()).catch(() => {});
+
+  // Photos taken offline upload when we're back on a connection.
+  import('./photos.js').then(m => {
+    m.retryPendingUploads();
+    window.addEventListener('online', () => m.retryPendingUploads());
+  }).catch(() => {});
 
   // Pull manager decisions + transfer commands on open and apply them locally.
   (async () => {

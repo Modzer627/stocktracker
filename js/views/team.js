@@ -50,6 +50,7 @@ function techDetail(t) {
   const canTransfer = data.team.length > 1;
   const row = (i) => `
     <div class="item-row${i.qty <= i.minQty ? ' low' : ''}" data-titem="${esc(i.id)}">
+      ${i.photo ? `<div class="thumb" data-photo-key="${esc(i.photo)}"></div>` : ''}
       <div class="item-main">
         <div class="item-name">${esc(i.name)}</div>
         <div class="item-sub">${[i.qty <= i.minQty ? '<span class="low-tag">LOW</span>' : '', esc(i.location || ''), i.minQty > 0 ? `min ${fmtQty(i.minQty)}` : ''].filter(Boolean).join(' · ') || '&nbsp;'}</div>
@@ -331,10 +332,12 @@ async function render() {
     const body = sec.querySelector('[data-body]');
     const caret = s.selectionStart;
     body.innerHTML = tech ? techDetail(tech) : allStock();
+    import('../photos.js').then(({ hydrateThumbs }) => hydrateThumbs(body));
     const ns = sec.querySelector('[data-tsearch]');
     ns.focus({ preventScroll: true });
     try { ns.setSelectionRange(caret, caret); } catch { /* ok */ }
   });
+  import('../photos.js').then(({ hydrateThumbs }) => hydrateThumbs(sec));
 }
 
 async function load(force = false) {

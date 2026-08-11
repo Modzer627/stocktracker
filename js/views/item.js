@@ -49,6 +49,7 @@ async function render() {
       <button class="icon-btn" data-edit aria-label="Edit">✎</button>
     </header>
     <div class="content">
+      ${item.photo ? `<div class="photo-hero" data-photo-key="${esc(item.photo)}" data-photo-view role="button" aria-label="View photo"></div>` : ''}
       <div class="item-row${low ? ' low' : ''}" style="margin-bottom:14px">
         <div class="item-main">
           <div class="item-name">In stock${low ? ' · <span class="low-tag">LOW</span>' : ''}</div>
@@ -76,6 +77,20 @@ async function render() {
   sec.querySelector('[data-back]').addEventListener('click', () => nav.back());
   sec.querySelector('[data-edit]').addEventListener('click', () =>
     openItemForm({ item, onSaved: (u) => { if (u) render(); } }));
+  if (item.photo) {
+    import('../photos.js').then(({ hydrateThumbs, getPhotoUrl }) => {
+      hydrateThumbs(sec);
+      sec.querySelector('[data-photo-view]')?.addEventListener('click', async () => {
+        const url = await getPhotoUrl(item.photo);
+        if (!url) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'photo-overlay';
+        overlay.innerHTML = `<img src="${url}" alt="${esc(item.name)}">`;
+        overlay.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+      });
+    });
+  }
   sec.querySelector('[data-in]').addEventListener('click', () =>
     openQtySheet({
       title: `Add stock — <span class="sheet-item-name">${esc(item.name)}</span>`,

@@ -296,7 +296,7 @@ async function render() {
     if (!one) return;
     const two = await confirmDialog('Really erase everything? There is no undo unless you have a backup file.', { danger: true, okLabel: 'Erase everything' });
     if (!two) return;
-    await dbClear('items', 'txns', 'meta');
+    await dbClear('items', 'txns', 'meta', 'photos');
     toast('All data erased');
     nav.resetTo('home');
   });

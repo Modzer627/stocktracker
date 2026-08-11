@@ -28,6 +28,14 @@ CREATE TABLE IF NOT EXISTS commands (
   created_at TEXT NOT NULL
 );
 
+-- v1.4: shared item photos, stored as base64 text (~135 KB per photo;
+-- D1 row cap is 2 MB, DB cap 500 MB ≈ 3,700 photos of headroom)
+CREATE TABLE IF NOT EXISTS photos (
+  key TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- v1.2: web-push subscriptions (endpoint URL is the natural unique key)
 CREATE TABLE IF NOT EXISTS push_subs (
   endpoint TEXT PRIMARY KEY,
