@@ -1,7 +1,7 @@
 // JSON backup/restore. With local-only storage this is both the safety net and
 // the way to move the inventory between the two phones.
 import { dbAll, dbPut, dbClear, metaGet, metaSet, newTx, txDone, notifyDataChanged } from './db.js';
-import { deliverFile } from './export.js';
+import { deliverFile, confirmExport } from './export.js';
 import { isoDate } from './ui.js';
 
 const SCHEMA_VERSION = 1;
@@ -20,6 +20,7 @@ export async function buildBackupPayload() {
 }
 
 export async function exportBackup() {
+  if (!(await confirmExport('a backup file (.json) of everything on this phone'))) return 'cancelled';
   const payload = await buildBackupPayload();
   const json = JSON.stringify(payload, null, 1);
   const result = await deliverFile(`stock-backup-${isoDate()}.json`, json, 'application/json');

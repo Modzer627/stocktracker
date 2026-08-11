@@ -2,6 +2,11 @@ import { uuid, round3, newTx, txDone, dbGet, dbAll, dbGetByIndex, dbPut, dbDel, 
 
 const now = () => Date.now();
 
+/** Manager phones mirror item writes into the shared server catalog (no-op for techs/solo). */
+function publishToCatalog(item) {
+  import('./catalog.js').then(m => m.publishItems(item)).catch(() => { /* best-effort */ });
+}
+
 function normalize(data) {
   const item = {
     name: (data.name || '').trim(),
@@ -34,7 +39,7 @@ export function createItem(data) {
         delta: item.qty, type: 'in', job: null, note: 'Initial stock', ts: now(),
       });
     }
-    t.oncomplete = () => { notifyDataChanged(); resolve(item); };
+    t.oncomplete = () => { notifyDataChanged(); publishToCatalog(item); resolve(item); };
     t.onerror = (e) => reject(friendly((e.target && e.target.error) || t.error));
     t.onabort = () => reject(friendly(t.error));
   });
@@ -54,6 +59,7 @@ export async function updateItem(id, patch) {
     throw friendly(e);
   }
   notifyDataChanged();
+  publishToCatalog(item);
   return item;
 }
 

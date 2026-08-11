@@ -1,4 +1,4 @@
-// Stocktake screens: the counting checklist and the review/confirm screen.
+// Inventory (count) screens: the counting checklist and the review/confirm screen.
 import { allItems, searchFilter } from '../items.js';
 import { getSession, startSession, saveSession, clearSession, setCount, progress, buildReview, commit } from '../stocktake.js';
 import { exportVarianceXlsx } from '../export.js';
@@ -36,7 +36,7 @@ async function renderCount() {
   sec.innerHTML = `
     <header class="hdr">
       <button class="icon-btn" data-back aria-label="Back">←</button>
-      <h1>Stocktake<span class="sub">${p.counted} of ${p.total} counted — nothing changes until you confirm</span></h1>
+      <h1>Inventory<span class="sub">${p.counted} of ${p.total} counted — nothing changes until you confirm</span></h1>
       <button class="icon-btn" data-menu aria-label="More">⋯</button>
     </header>
     <div class="content">
@@ -104,16 +104,16 @@ function openMenu() {
   const wrap = document.createElement('div');
   wrap.innerHTML = `
     <button class="btn btn-block" data-pause style="margin-bottom:10px">Pause — continue later</button>
-    <button class="btn btn-block" data-discard style="color:var(--danger)">Discard this stocktake</button>`;
-  const s = sheet({ title: 'Stocktake', content: wrap });
-  wrap.querySelector('[data-pause]').addEventListener('click', () => { s.close(); toast('Stocktake saved — resume from the home screen'); nav.resetTo('home'); });
+    <button class="btn btn-block" data-discard style="color:var(--danger)">Discard this inventory</button>`;
+  const s = sheet({ title: 'Inventory', content: wrap });
+  wrap.querySelector('[data-pause]').addEventListener('click', () => { s.close(); toast('Inventory saved — resume from the home screen'); nav.resetTo('home'); });
   wrap.querySelector('[data-discard]').addEventListener('click', async () => {
     s.close();
     const yes = await confirmDialog('Throw away this count? Stock levels stay exactly as they are.', { danger: true, okLabel: 'Discard' });
     if (!yes) return;
     await clearSession();
     session = null;
-    toast('Stocktake discarded');
+    toast('Inventory discarded');
     nav.resetTo('home');
   });
 }
@@ -137,7 +137,7 @@ async function renderReview() {
   sec.innerHTML = `
     <header class="hdr">
       <button class="icon-btn" data-back aria-label="Back">←</button>
-      <h1>Review stocktake<span class="sub">${review.counted.length} counted · ${review.variances} difference${review.variances === 1 ? '' : 's'} · ${review.uncounted.length} not counted</span></h1>
+      <h1>Review inventory<span class="sub">${review.counted.length} counted · ${review.variances} difference${review.variances === 1 ? '' : 's'} · ${review.uncounted.length} not counted</span></h1>
     </header>
     <div class="content">
       ${review.counted.length ? `
@@ -167,7 +167,7 @@ async function renderReview() {
   sec.querySelector('[data-back]').addEventListener('click', () => nav.back());
   sec.querySelector('[data-export-var]').addEventListener('click', async () => {
     const r = await exportVarianceXlsx(review);
-    if (r === 'shared' || r === 'downloaded') toast('Stocktake report exported');
+    if (r === 'shared' || r === 'downloaded') toast('Inventory report exported');
   });
   const zeroBox = () => !!sec.querySelector('[data-zero]')?.checked;
   sec.querySelector('[data-zero]')?.addEventListener('change', (e) => {
@@ -181,14 +181,14 @@ async function renderReview() {
     const changes = review.variances + (zero ? review.uncounted.filter(i => i.qty !== 0).length : 0);
     const yes = await confirmDialog(
       changes === 0
-        ? 'Everything matches — confirm to finish the stocktake with no changes?'
+        ? 'Everything matches — confirm to finish the inventory with no changes?'
         : `Apply ${changes} stock correction${changes === 1 ? '' : 's'} now? This updates your inventory in one go.`,
       { okLabel: 'Update stock' }
     );
     if (!yes) return;
     const result = await commit(review, { zeroUncounted: zero });
     session = null;
-    toast(`Stocktake done — ${result.adjusted} adjusted${result.zeroed ? `, ${result.zeroed} zeroed` : ''}, ${result.unchanged} matched`, { duration: 4200 });
+    toast(`Inventory done — ${result.adjusted} adjusted${result.zeroed ? `, ${result.zeroed} zeroed` : ''}, ${result.unchanged} matched`, { duration: 4200 });
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <p style="margin-bottom:14px;font-size:15px">Save the variance report for your records?</p>
@@ -196,7 +196,7 @@ async function renderReview() {
         <button class="btn" data-skip>Skip</button>
         <button class="btn btn-primary" data-exp>Export report</button>
       </div>`;
-    const s = sheet({ title: 'Stocktake complete', content: wrap, onClose: () => nav.resetTo('home') });
+    const s = sheet({ title: 'Inventory complete', content: wrap, onClose: () => nav.resetTo('home') });
     wrap.querySelector('[data-skip]').addEventListener('click', () => s.close());
     wrap.querySelector('[data-exp]').addEventListener('click', async () => {
       await exportVarianceXlsx(review);
@@ -212,7 +212,7 @@ export const stocktakeView = {
     session = await getSession();
     if (!session) {
       session = await startSession();
-      toast('Stocktake started — count items by scanning or typing');
+      toast('Inventory started — count items by scanning or typing');
     }
     query = '';
     return renderCount();

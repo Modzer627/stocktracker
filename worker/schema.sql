@@ -36,6 +36,24 @@ CREATE TABLE IF NOT EXISTS photos (
   updated_at TEXT NOT NULL
 );
 
+-- v1.5: the master parts catalog — the source of truth for what parts exist.
+-- Phones hold working copies; deleting an item on a phone never touches this
+-- table. Rows are soft-deleted (deleted = 1) so history is never lost.
+CREATE TABLE IF NOT EXISTS catalog (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  barcode TEXT,
+  category TEXT,
+  unit TEXT NOT NULL DEFAULT 'pcs',
+  min_qty REAL NOT NULL DEFAULT 0,
+  cost REAL,
+  notes TEXT,
+  photo TEXT,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- v1.2: web-push subscriptions (endpoint URL is the natural unique key)
 CREATE TABLE IF NOT EXISTS push_subs (
   endpoint TEXT PRIMARY KEY,

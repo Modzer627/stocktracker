@@ -7,11 +7,12 @@ import scanView from './views/scan.js';
 import itemView from './views/item.js';
 import settingsView from './views/settings.js';
 import teamView from './views/team.js';
+import catalogView from './views/catalog.js';
 import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
 import { initSync } from './sync.js';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;
@@ -36,6 +37,7 @@ async function boot() {
   nav.register('review', reviewView);
   nav.register('settings', settingsView);
   nav.register('team', teamView);
+  nav.register('catalog', catalogView);
   nav.register('insights', insightsView);
   await nav.show('home');
 
@@ -48,6 +50,12 @@ async function boot() {
   import('./photos.js').then(m => {
     m.retryPendingUploads();
     window.addEventListener('online', () => m.retryPendingUploads());
+  }).catch(() => {});
+
+  // Catalog writes made offline (manager phones) retry the same way.
+  import('./catalog.js').then(m => {
+    m.flushCatalogQueue();
+    window.addEventListener('online', () => m.flushCatalogQueue());
   }).catch(() => {});
 
   // Pull manager decisions + transfer commands on open and apply them locally.

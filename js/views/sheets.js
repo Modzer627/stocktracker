@@ -60,7 +60,7 @@ export async function openUseSheet(item, { onDone = null } = {}) {
       const doneCb = onDone; onDone = null;
       s.close();
       toast(`Used ${fmtQty(qty)} ${updated.unit} — ${updated.name}${job ? ' · ' + job : ''} (now ${fmtQty(updated.qty)})`);
-      if (updated.qty < 0) toast(`${updated.name} is negative — fix it with a stocktake`, { error: true, duration: 4000 });
+      if (updated.qty < 0) toast(`${updated.name} is negative — fix it with an inventory count`, { error: true, duration: 4000 });
       if (doneCb) doneCb(updated);
     } catch (e) {
       toast(e.message || 'Could not save', { error: true });

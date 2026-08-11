@@ -1,5 +1,7 @@
-// Stocktake (physical count) session. Counts live in `meta` until the user
-// confirms on the review screen — only then does stock actually change.
+// Inventory (physical count, formerly "stocktake") session. Counts live in
+// `meta` until the user confirms on the review screen — only then does stock
+// actually change. Internal keys keep the old 'stocktake' name so an
+// in-progress session survives the update.
 import { metaGet, metaSet, applyStockChange, round3 } from './db.js';
 import { isoDate } from './ui.js';
 
@@ -63,7 +65,7 @@ export function buildReview(items, session) {
  * per uncounted item, zeroing it). Clears the session afterwards.
  */
 export async function commit(review, { zeroUncounted = false } = {}) {
-  const note = `Stocktake ${isoDate()}`;
+  const note = `Inventory ${isoDate()}`;
   let adjusted = 0;
   let zeroed = 0;
   for (const row of review.counted) {

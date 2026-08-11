@@ -33,6 +33,9 @@ async function render() {
   if (!item) { nav.back(); return; }
   const history = await itemHistory(item.id, 60);
   const low = isLow(item);
+  // Techs only change stock amounts — item details are manager-controlled.
+  const { appRole } = await import('../requests.js');
+  const canEdit = (await appRole()) !== 'tech';
 
   const detailBits = [
     item.barcode ? `<b>Barcode:</b> ${esc(item.barcode)}` : '',
@@ -46,7 +49,7 @@ async function render() {
     <header class="hdr">
       <button class="icon-btn" data-back aria-label="Back">←</button>
       <h1>${esc(item.name)}<span class="sub">${item.category ? esc(item.category) : 'Item'}</span></h1>
-      <button class="icon-btn" data-edit aria-label="Edit">✎</button>
+      ${canEdit ? '<button class="icon-btn" data-edit aria-label="Edit">✎</button>' : ''}
     </header>
     <div class="content">
       ${item.photo ? `<div class="photo-hero" data-photo-key="${esc(item.photo)}" data-photo-view role="button" aria-label="View photo"></div>` : ''}
@@ -71,11 +74,13 @@ async function render() {
       <div class="section-title">History</div>
       ${history.length ? history.map(txnRow).join('') : '<div class="empty">No movements yet.</div>'}
 
-      <button class="btn btn-block" data-delete style="margin-top:22px;color:var(--danger)">Delete item</button>
+      ${canEdit
+        ? '<button class="btn btn-block" data-delete style="margin-top:22px;color:var(--danger)">Delete item</button>'
+        : '<p style="margin-top:22px;color:var(--text-dim);font-size:13px;text-align:center">Item details are managed by your manager — you can only change stock amounts.</p>'}
     </div>`;
 
   sec.querySelector('[data-back]').addEventListener('click', () => nav.back());
-  sec.querySelector('[data-edit]').addEventListener('click', () =>
+  sec.querySelector('[data-edit]')?.addEventListener('click', () =>
     openItemForm({ item, onSaved: (u) => { if (u) render(); } }));
   if (item.photo) {
     import('../photos.js').then(({ hydrateThumbs, getPhotoUrl }) => {
@@ -106,8 +111,8 @@ async function render() {
   sec.querySelector('[data-use]').addEventListener('click', () =>
     openUseSheet(item, { onDone: (u) => { if (u) render(); } }));
   sec.querySelector('[data-adjust]').addEventListener('click', () => openAdjustSheet(item));
-  sec.querySelector('[data-delete]').addEventListener('click', async () => {
-    const yes = await confirmDialog(`Delete "${item.name}"? Its history stays in the usage log, but the item and its count are removed.`, { danger: true, okLabel: 'Delete' });
+  sec.querySelector('[data-delete]')?.addEventListener('click', async () => {
+    const yes = await confirmDialog(`Delete "${item.name}" from this phone? Its history stays in the usage log. Items in the team parts catalog stay in the catalog.`, { danger: true, okLabel: 'Delete' });
     if (!yes) return;
     await deleteItem(item.id);
     toast(`Deleted ${item.name}`);

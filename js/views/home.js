@@ -8,6 +8,7 @@ import { exportBackup } from '../backup.js';
 import { $, esc, fmtQty, toast, sheet } from '../ui.js';
 import * as nav from '../nav.js';
 import { managerConfigured } from '../sync.js';
+import { catalogAvailable } from '../catalog.js';
 import { openUseSheet, openItemForm } from './sheets.js';
 
 const section = () => document.getElementById('screen-home');
@@ -47,7 +48,7 @@ async function bannersHTML() {
   if (session) {
     const items = await allItems();
     const p = progress(session, items);
-    out.push(`<div class="banner info">Stocktake in progress — ${p.counted}/${p.total} counted.<button class="btn btn-sm btn-primary" data-resume-st>Resume</button></div>`);
+    out.push(`<div class="banner info">Inventory in progress — ${p.counted}/${p.total} counted.<button class="btn btn-sm btn-primary" data-resume-st>Resume</button></div>`);
   }
   const items2 = await allItems();
   if (await backupBannerNeeded(items2.length)) {
@@ -64,9 +65,11 @@ async function render() {
   const banners = await bannersHTML();
 
   const showTeam = await managerConfigured();
+  const showCatalog = await catalogAvailable();
   sec.innerHTML = `
     <header class="hdr">
       <h1><span class="logo-mark" aria-hidden="true"></span>Stock Tracker</h1>
+      ${showCatalog ? '<button class="icon-btn" data-catalog aria-label="All parts">🗂</button>' : ''}
       <button class="icon-btn" data-insights aria-label="Insights">📈</button>
       ${showTeam ? '<button class="icon-btn" data-team aria-label="Team" style="position:relative">👥<span class="req-dot" data-reqdot hidden></span></button>' : ''}
       <button class="icon-btn" data-settings aria-label="Settings">⚙︎</button>
@@ -88,7 +91,7 @@ async function render() {
     <div class="actionbar">
       <button class="btn btn-primary" data-scan><span class="ico">▣</span>Scan</button>
       <button class="btn" data-add><span class="ico">＋</span>Add</button>
-      <button class="btn" data-stocktake><span class="ico">✓</span>Stocktake</button>
+      <button class="btn" data-stocktake><span class="ico">✓</span>Inventory</button>
       <button class="btn" data-export><span class="ico">⇪</span>Export</button>
     </div>`;
 
@@ -104,6 +107,7 @@ function wire(sec, items) {
   });
 
   sec.querySelector('[data-settings]').addEventListener('click', () => nav.show('settings'));
+  sec.querySelector('[data-catalog]')?.addEventListener('click', () => nav.show('catalog'));
   sec.querySelector('[data-insights]').addEventListener('click', () => nav.show('insights'));
   sec.querySelector('[data-team]')?.addEventListener('click', () => nav.show('team'));
   sec.querySelector('[data-scan]').addEventListener('click', () => nav.show('scan'));
