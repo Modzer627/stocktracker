@@ -65,7 +65,7 @@ async function render() {
   const showTeam = await managerConfigured();
   sec.innerHTML = `
     <header class="hdr">
-      <h1>Stock Tracker</h1>
+      <h1><span class="logo-mark" aria-hidden="true"></span>Stock Tracker</h1>
       <button class="icon-btn" data-insights aria-label="Insights">📈</button>
       ${showTeam ? '<button class="icon-btn" data-team aria-label="Team" style="position:relative">👥<span class="req-dot" data-reqdot hidden></span></button>' : ''}
       <button class="icon-btn" data-settings aria-label="Settings">⚙︎</button>

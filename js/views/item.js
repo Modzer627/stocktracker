@@ -9,7 +9,7 @@ import { openUseSheet, openItemForm, openQtySheet } from './sheets.js';
 const section = () => document.getElementById('screen-item');
 let currentId = null;
 
-const TYPE_ICON = { in: '+', out: '−', adjust: '≡' };
+const TYPE_ICON = { in: '+', out: '−', adjust: '≡', transfer: '⇄' };
 
 function txnRow(t) {
   const pos = t.delta > 0;
@@ -20,7 +20,7 @@ function txnRow(t) {
     <div class="txn-row">
       <div class="txn-ico ${t.type}">${TYPE_ICON[t.type] || '·'}</div>
       <div class="txn-main">
-        <div>${t.type === 'in' ? 'Stock in' : t.type === 'out' ? 'Used' : 'Adjusted'}</div>
+        <div>${t.type === 'in' ? 'Stock in' : t.type === 'out' ? 'Used' : t.type === 'transfer' ? 'Transfer' : 'Adjusted'}</div>
         <div class="txn-sub">${fmtDateTime(t.ts)}${bits.length ? ' · ' + bits.join(' · ') : ''}</div>
       </div>
       <div class="txn-delta ${pos ? 'pos' : 'neg'}">${pos ? '+' : ''}${fmtQty(t.delta)}</div>

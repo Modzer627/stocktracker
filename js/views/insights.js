@@ -3,9 +3,9 @@
 import { dbAll } from '../db.js';
 import { allItems } from '../items.js';
 import { managerConfigured, fetchTeam, cachedTeam } from '../sync.js';
-import { usageByJob, usageRates, topUsed, weeklyUsage, stockValue, mergeTeamTxns, aggregateTeamItems, usageByTech } from '../analytics.js';
+import { usageByJob, usageRates, topUsed, weeklyUsage, stockValue, mergeTeamTxns, aggregateTeamItems, usageByTech, reorderSuggestions, teamReorderSuggestions } from '../analytics.js';
 import { barChart, meter, wireCharts } from '../charts.js';
-import { exportJobCostingXlsx } from '../export.js';
+import { exportJobCostingXlsx, exportReorderXlsx } from '../export.js';
 import { esc, fmtQty, fmtDateTime, toast } from '../ui.js';
 import * as nav from '../nav.js';
 
@@ -127,6 +127,7 @@ async function render() {
       ${statTiles(items, txns)}
       <div class="section-title">Running out soon <span class="txn-sub" style="text-transform:none;letter-spacing:0">(by usage rate, not just min-stock)</span></div>
       ${runningOut(items, txns)}
+      <button class="btn btn-block" data-reorder style="margin-top:8px">🛒 Reorder report (Excel)</button>
       <div class="section-title">Weekly usage (12 weeks)</div>
       ${barChart(weekly)}
       <div class="section-title">Most used (30 days)</div>
@@ -144,6 +145,12 @@ async function render() {
     render();
   }));
   sec.querySelectorAll('[data-jobdays]').forEach(b => b.addEventListener('click', () => { jobDays = Number(b.dataset.jobdays); render(); }));
+  sec.querySelector('[data-reorder]').addEventListener('click', async () => {
+    const rows = scope === 'team' && team ? teamReorderSuggestions(team) : reorderSuggestions(items, txns);
+    if (!rows.length) { toast('Nothing needs reordering right now 🎉'); return; }
+    const r = await exportReorderXlsx(rows, { team: scope === 'team', scopeLabel: scope === 'team' ? 'team' : 'van' });
+    if (r === 'shared' || r === 'downloaded') toast(`Reorder report exported — ${rows.length} item${rows.length === 1 ? '' : 's'}`);
+  });
   sec.querySelector('[data-export-jobs]').addEventListener('click', async () => {
     const jobs = usageByJob(txns, { sinceTs: Date.now() - jobDays * DAY });
     const itemCosts = new Map();

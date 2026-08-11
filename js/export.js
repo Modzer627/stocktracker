@@ -13,7 +13,7 @@ function stamp(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-const TYPE_LABEL = { in: 'In', out: 'Out', adjust: 'Adjust' };
+const TYPE_LABEL = { in: 'In', out: 'Out', adjust: 'Adjust', transfer: 'Transfer' };
 
 export function buildInventoryWorkbook(items, txns) {
   const wb = XLSX.utils.book_new();
@@ -133,6 +133,46 @@ export async function exportJobCostingXlsx(jobs, { scopeLabel = 'van', days = 90
   const wb = buildJobCostingWorkbook(jobs, { itemCosts });
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return deliverFile(`jobs-${scopeLabel}-${days}d-${isoDate()}.xlsx`, buf, XLSX_MIME);
+}
+
+export function buildReorderWorkbook(rows, { team = false } = {}) {
+  const wb = XLSX.utils.book_new();
+  let aoa;
+  if (team) {
+    aoa = [
+      ['Category', 'Item', 'Barcode', 'Unit', 'Team on hand', 'Vans needing it', 'Order qty', 'Est. cost'],
+      ...rows.map(r => [r.category, r.name, r.barcode, r.unit, Number(fmtQty(r.teamOnHand)), r.vans.join(', '), r.suggested, r.estCost ?? '']),
+    ];
+  } else {
+    aoa = [
+      ['Category', 'Item', 'Barcode', 'Unit', 'On hand', 'Min', 'Days left', 'Order qty', 'Cost/unit', 'Est. cost'],
+      ...rows.map(r => [
+        r.item.category || '', r.item.name, r.item.barcode || '', r.item.unit,
+        Number(fmtQty(r.item.qty)), Number(fmtQty(r.item.minQty)),
+        r.daysLeft === null ? '' : r.daysLeft, r.suggested,
+        typeof r.item.cost === 'number' && r.item.cost > 0 ? r.item.cost : '', r.estCost ?? '',
+      ]),
+    ];
+  }
+  const costCol = aoa[0].length - 1;
+  const total = rows.reduce((s, r) => s + (r.estCost || 0), 0);
+  if (total > 0) {
+    const totalRow = new Array(aoa[0].length).fill('');
+    totalRow[costCol - 1] = 'TOTAL';
+    totalRow[costCol] = Math.round(total * 100) / 100;
+    aoa.push(totalRow);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = aoa[0].map((h, i) => ({ wch: i === 1 || h === 'Vans needing it' ? 28 : 11 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Reorder');
+  return wb;
+}
+
+export async function exportReorderXlsx(rows, { team = false, scopeLabel = 'van' } = {}) {
+  if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  const wb = buildReorderWorkbook(rows, { team });
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return deliverFile(`reorder-${scopeLabel}-${isoDate()}.xlsx`, buf, XLSX_MIME);
 }
 
 export function buildTeamWorkbook(team, { aggregate, teamTxns, teamJobs }) {

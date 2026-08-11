@@ -97,6 +97,11 @@ async function render() {
           <button class="btn btn-sm" data-restore>Choose file</button>
           <input type="file" accept=".json,application/json" data-restore-file hidden>
         </div>
+        <div class="set-row" data-import-row hidden>
+          <div class="grow">Bulk import items<span class="hint">Seed from a CSV or Excel list · <button class="btn-ghost" data-template style="padding:0;min-height:0;font-size:12.5px">download template</button></span></div>
+          <button class="btn btn-sm" data-import>Choose file</button>
+          <input type="file" accept=".csv,.xlsx,.xls,text/csv" data-import-file hidden>
+        </div>
         <div class="set-row">
           <div class="grow" style="color:var(--danger)">Erase everything<span class="hint">Deletes all items and history from this phone</span></div>
           <button class="btn btn-sm" data-wipe style="color:var(--danger)">Erase</button>
@@ -233,6 +238,56 @@ async function render() {
       openRestoreChoice(data);
     } catch (e) {
       toast(e.message, { error: true });
+    }
+  });
+
+  // --- bulk import (managers and solo phones only — techs go through requests) ---
+  import('../requests.js').then(async ({ appRole }) => {
+    if ((await appRole()) !== 'tech') sec.querySelector('[data-import-row]').hidden = false;
+  });
+  const importInput = sec.querySelector('[data-import-file]');
+  sec.querySelector('[data-import]').addEventListener('click', () => importInput.click());
+  sec.querySelector('[data-template]').addEventListener('click', async () => {
+    const { downloadTemplate } = await import('../importer.js');
+    await downloadTemplate();
+  });
+  importInput.addEventListener('change', async () => {
+    const file = importInput.files[0];
+    importInput.value = '';
+    if (!file) return;
+    try {
+      const { parseImportFile, runImport } = await import('../importer.js');
+      const { rows, report } = await parseImportFile(file);
+      if (!rows.length) { toast('No item rows found in that file', { error: true }); return; }
+      const { sheet } = await import('../ui.js');
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <p style="font-size:14.5px;line-height:1.7;margin-bottom:12px">
+          Found <b>${rows.length}</b> item${rows.length === 1 ? '' : 's'} in <b>${esc(file.name)}</b>.<br>
+          Columns matched: ${report.mapped.join(', ')}${report.unmappedHeaders.length ? `<br><span style="color:var(--text-dim)">Ignored: ${esc(report.unmappedHeaders.join(', '))}</span>` : ''}
+          ${report.skippedNoName ? `<br><span style="color:var(--warn-text)">${report.skippedNoName} row(s) skipped — no name</span>` : ''}
+        </p>
+        ${rows.slice(0, 3).map(r => `<div class="rev-row"><div class="rev-main"><div>${esc(r.name)}</div><div class="txn-sub">${r.qty} ${esc(r.unit)} · min ${r.minQty}${r.barcode ? ' · ' + esc(r.barcode) : ''}</div></div></div>`).join('')}
+        ${rows.length > 3 ? `<p class="txn-sub" style="margin-top:6px">…and ${rows.length - 3} more</p>` : ''}
+        <div class="sheet-actions">
+          <button class="btn" data-cancel>Cancel</button>
+          <button class="btn btn-primary" data-go>Import ${rows.length}</button>
+        </div>`;
+      const s = sheet({ title: 'Import items', content: wrap });
+      wrap.querySelector('[data-cancel]').addEventListener('click', () => s.close());
+      wrap.querySelector('[data-go]').addEventListener('click', async () => {
+        wrap.querySelector('[data-go]').disabled = true;
+        const result = await runImport(rows);
+        s.close();
+        const bits = [`${result.added} added`];
+        if (result.dupBarcode) bits.push(`${result.dupBarcode} skipped (barcode exists)`);
+        if (result.dupName) bits.push(`${result.dupName} skipped (already have it)`);
+        if (result.failed) bits.push(`${result.failed} failed`);
+        toast(`Import done — ${bits.join(', ')}`, { duration: 6000 });
+        render();
+      });
+    } catch (e) {
+      toast(e.message || 'Could not read that file', { error: true, duration: 6000 });
     }
   });
 

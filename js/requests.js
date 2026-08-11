@@ -1,6 +1,6 @@
 // Item-add requests: techs propose items, managers decide, approved items are
 // created locally by the tech's own phone next time it checks in.
-import { metaGet, metaSet } from './db.js';
+import { metaGet, metaSet, applyStockChange } from './db.js';
 import { createItem, getByBarcode, allItems } from './items.js';
 import { workerUrl, getTechId, managerConfigured, syncConfigured } from './sync.js';
 
@@ -90,6 +90,68 @@ export async function dismissRejected(id) {
   await fetch(`${await workerUrl()}/v1/requests/${id}/dismiss`, {
     method: 'POST', headers: await teamHeaders(), body: JSON.stringify({ techId: await getTechId() }),
   }).catch(() => {});
+}
+
+/* ---------------- transfer commands ---------------- */
+
+/** Pull pending commands (transfers) for this phone and apply them. */
+export async function applyCommands() {
+  const techId = await getTechId();
+  const res = await fetch(`${await workerUrl()}/v1/commands/mine?techId=${encodeURIComponent(techId)}`, {
+    headers: await teamHeaders(),
+  });
+  if (!res.ok) return { transfers: [] };
+  const { commands } = await res.json();
+  const transfers = [];
+  for (const c of commands) {
+    const p = c.payload;
+    try {
+      if (c.type === 'transfer_in') {
+        let item = p.item.barcode ? await getByBarcode(p.item.barcode) : null;
+        if (!item) {
+          const items = await allItems();
+          item = items.find(i => i.name.trim().toLowerCase() === p.item.name.trim().toLowerCase() && i.unit === p.item.unit);
+        }
+        if (!item) item = await createItem({ ...p.item, qty: 0 });
+        await applyStockChange({ itemId: item.id, delta: p.qty, type: 'transfer', note: `Transfer from ${p.otherTech}` });
+        transfers.push(`+${p.qty} ${item.unit} ${item.name} (from ${p.otherTech})`);
+      } else if (c.type === 'transfer_out') {
+        let item = p.item.barcode ? await getByBarcode(p.item.barcode) : null;
+        if (!item) {
+          const items = await allItems();
+          item = items.find(i => i.name.trim().toLowerCase() === p.item.name.trim().toLowerCase() && i.unit === p.item.unit);
+        }
+        if (item) {
+          await applyStockChange({ itemId: item.id, delta: -p.qty, type: 'transfer', note: `Transfer to ${p.otherTech}` });
+          transfers.push(`−${p.qty} ${item.unit} ${item.name} (to ${p.otherTech})`);
+        }
+      }
+      await fetch(`${await workerUrl()}/v1/commands/${c.id}/applied`, {
+        method: 'POST', headers: await teamHeaders(), body: JSON.stringify({ techId }),
+      }).catch(() => {});
+    } catch { /* a broken command must not block the rest */ }
+  }
+  return { transfers };
+}
+
+/** Manager: create both halves of a van→van transfer. */
+export async function createTransfer({ fromTechId, fromName, toTechId, toName, item, qty }) {
+  const groupId = crypto.randomUUID();
+  const itemFields = {
+    name: item.name, barcode: item.barcode, unit: item.unit, category: item.category,
+    location: '', minQty: item.minQty, cost: item.cost, notes: '',
+  };
+  const res = await fetch(`${await workerUrl()}/v1/commands`, {
+    method: 'POST',
+    headers: await managerHeaders(),
+    body: JSON.stringify({
+      commands: [
+        { techId: fromTechId, type: 'transfer_out', payload: { qty, item: itemFields, otherTech: toName, groupId } },
+        { techId: toTechId, type: 'transfer_in', payload: { qty, item: itemFields, otherTech: fromName, groupId } },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Could not create the transfer (${res.status})`);
 }
 
 /* ---------------- manager side ---------------- */

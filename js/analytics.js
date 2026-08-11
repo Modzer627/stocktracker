@@ -97,6 +97,61 @@ export function stockValue(items) {
   return { total: Math.round(total * 100) / 100, costed, uncosted: items.length - costed };
 }
 
+/**
+ * Reorder suggestions: everything at/below min PLUS anything forecast to run
+ * out within `horizonDays`. Suggested order tops the item up to the larger of
+ * 2× min stock or `coverDays` of usage.
+ */
+export function reorderSuggestions(items, txns, { horizonDays = 21, coverDays = 30 } = {}) {
+  const rates = new Map(usageRates(items, txns, { days: 90 }).map(r => [r.item.id, r]));
+  const rows = [];
+  for (const item of items) {
+    const r = rates.get(item.id);
+    const low = item.qty <= item.minQty;
+    const runningOut = !!r && r.daysLeft <= horizonDays;
+    if (!low && !runningOut) continue;
+    const rate = r ? r.perDay : 0;
+    const target = Math.max(item.minQty * 2, rate * coverDays);
+    const suggested = Math.ceil(Math.max(target - item.qty, 0));
+    if (suggested <= 0) continue;
+    const hasCost = typeof item.cost === 'number' && item.cost > 0;
+    rows.push({
+      item, low,
+      daysLeft: r ? r.daysLeft : null,
+      suggested,
+      estCost: hasCost ? Math.round(suggested * item.cost * 100) / 100 : null,
+    });
+  }
+  return rows.sort((a, b) =>
+    (a.item.category || '~').localeCompare(b.item.category || '~') ||
+    a.item.name.localeCompare(b.item.name));
+}
+
+/** Team-wide reorder list: per-van suggestions merged per item, with team totals. */
+export function teamReorderSuggestions(team) {
+  const onHand = new Map(aggregateTeamItems(team).map(r => [r.key, r.total]));
+  const merged = new Map();
+  for (const t of team) {
+    const items = t.snapshot.items || [];
+    const rows = reorderSuggestions(items, t.snapshot.txns || []);
+    for (const row of rows) {
+      const i = row.item;
+      const key = i.barcode ? `bc:${i.barcode}` : `nm:${i.name.trim().toLowerCase()}|${i.unit}`;
+      let m = merged.get(key);
+      if (!m) {
+        m = { name: i.name, unit: i.unit, barcode: i.barcode || '', category: i.category || '', teamOnHand: onHand.get(key) ?? i.qty, suggested: 0, estCost: 0, hasCost: false, vans: [] };
+        merged.set(key, m);
+      }
+      m.suggested += row.suggested;
+      m.vans.push(t.techName);
+      if (row.estCost !== null) { m.estCost += row.estCost; m.hasCost = true; }
+    }
+  }
+  return [...merged.values()]
+    .map(m => ({ ...m, estCost: m.hasCost ? Math.round(m.estCost * 100) / 100 : null }))
+    .sort((a, b) => (a.category || '~').localeCompare(b.category || '~') || a.name.localeCompare(b.name));
+}
+
 /* ---------------- team variants ---------------- */
 
 /** All techs' txns merged, each tagged with its tech name. */

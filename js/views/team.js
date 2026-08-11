@@ -47,13 +47,15 @@ function techDetail(t) {
     ? items.filter(i => (i.name + ' ' + (i.barcode || '') + ' ' + (i.location || '')).toLowerCase().includes(query.toLowerCase()))
     : items;
   const lows = filtered.filter(i => i.qty <= i.minQty);
+  const canTransfer = data.team.length > 1;
   const row = (i) => `
-    <div class="item-row${i.qty <= i.minQty ? ' low' : ''}">
+    <div class="item-row${i.qty <= i.minQty ? ' low' : ''}" data-titem="${esc(i.id)}">
       <div class="item-main">
         <div class="item-name">${esc(i.name)}</div>
         <div class="item-sub">${[i.qty <= i.minQty ? '<span class="low-tag">LOW</span>' : '', esc(i.location || ''), i.minQty > 0 ? `min ${fmtQty(i.minQty)}` : ''].filter(Boolean).join(' · ') || '&nbsp;'}</div>
       </div>
       <div class="item-qty"><div class="q${i.qty < 0 ? ' neg' : ''}">${fmtQty(i.qty)}</div><div class="u">${esc(i.unit)}</div></div>
+      ${canTransfer ? `<button class="icon-btn" data-transfer title="Transfer to another van">⇄</button>` : ''}
     </div>`;
   return `
     <div class="banner info">Viewing <b>&nbsp;${esc(t.techName)}&nbsp;</b> · read-only · synced ${ago(new Date(t.updatedAt).getTime())}
@@ -188,6 +190,58 @@ async function loadRequests() {
   try { requests = await allRequests(); } catch { /* keep whatever we had */ }
 }
 
+function openTransferSheet(fromTech, item) {
+  const others = data.team.filter(t => t.techId !== fromTech.techId);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <p style="color:var(--text-dim);font-size:13.5px;margin-bottom:12px">
+      From <b>${esc(fromTech.techName)}</b> — has ${fmtQty(item.qty)} ${esc(item.unit)}
+    </p>
+    <div class="qty-stepper">
+      <button type="button" data-step="-1">−</button>
+      <input type="text" inputmode="decimal" value="1" data-tqty>
+      <button type="button" data-step="1">+</button>
+    </div>
+    <div class="field">
+      <label>To</label>
+      <select data-tdest>${others.map(t => `<option value="${esc(t.techId)}">${esc(t.techName)}</option>`).join('')}</select>
+    </div>
+    <div class="banner info" style="font-size:13px">Both phones apply the transfer next time they open the app (they'll get a notification now).</div>
+    <div class="sheet-actions">
+      <button type="button" class="btn" data-cancel>Cancel</button>
+      <button type="button" class="btn btn-primary" data-ok>Transfer</button>
+    </div>`;
+  const s = sheet({ title: `Transfer — <span class="sheet-item-name">${esc(item.name)}</span>`, content: wrap });
+  const input = wrap.querySelector('[data-tqty]');
+  wrap.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+    const cur = parseFloat(input.value.replace(',', '.')) || 0;
+    input.value = fmtQty(Math.max(0.001, cur + Number(b.dataset.step)));
+  }));
+  wrap.querySelector('[data-cancel]').addEventListener('click', () => s.close());
+  wrap.querySelector('[data-ok]').addEventListener('click', async () => {
+    const qty = parseFloat(input.value.replace(',', '.'));
+    if (!qty || qty <= 0) { toast('Enter a quantity', { error: true }); return; }
+    const destId = wrap.querySelector('[data-tdest]').value;
+    const dest = others.find(t => t.techId === destId);
+    if (qty > item.qty) {
+      const sure = await confirmDialog(`${fromTech.techName} only shows ${fmtQty(item.qty)} ${item.unit} — transfer ${fmtQty(qty)} anyway?`, { okLabel: 'Transfer anyway' });
+      if (!sure) return;
+    }
+    try {
+      const { createTransfer } = await import('../requests.js');
+      await createTransfer({
+        fromTechId: fromTech.techId, fromName: fromTech.techName,
+        toTechId: dest.techId, toName: dest.techName,
+        item, qty,
+      });
+      s.close();
+      toast(`Transfer queued: ${fmtQty(qty)} ${item.unit} ${item.name} → ${dest.techName}`, { duration: 4500 });
+    } catch (e) {
+      toast(e.message, { error: true });
+    }
+  });
+}
+
 async function render() {
   const sec = section();
   if (!data) {
@@ -243,6 +297,14 @@ async function render() {
   sec.querySelector('[data-insights]').addEventListener('click', () => nav.show('insights', { scope: 'team' }));
 
   sec.querySelector('[data-body]').addEventListener('click', (e) => {
+    const transferBtn = e.target.closest('[data-transfer]');
+    if (transferBtn) {
+      const itemId = transferBtn.closest('[data-titem]').dataset.titem;
+      const fromTech = data.team.find(t => t.techId === openTechId);
+      const item = fromTech?.snapshot.items.find(i => i.id === itemId);
+      if (fromTech && item) openTransferSheet(fromTech, item);
+      return;
+    }
     const reviewBtn = e.target.closest('[data-review]');
     if (reviewBtn) {
       const id = reviewBtn.closest('[data-req]').dataset.req;

@@ -11,7 +11,7 @@ import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
 import { initSync } from './sync.js';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;
@@ -44,17 +44,17 @@ async function boot() {
   // Keep the push subscription registered (iOS drops them silently).
   import('./push.js').then(m => m.resyncSubscription()).catch(() => {});
 
-  // Techs: pull manager decisions on open — approved items get created locally.
+  // Pull manager decisions + transfer commands on open and apply them locally.
   (async () => {
-    const { appRole, applyDecisions, dismissRejected } = await import('./requests.js');
+    const { appRole, applyDecisions, dismissRejected, applyCommands } = await import('./requests.js');
     const role = await appRole();
     if (role === 'solo') return;
     try {
       const { applied, rejected } = await applyDecisions();
-      if (applied.length) {
-        toast(`Manager approved: ${applied.join(', ')} — added to your inventory`, { duration: 5000 });
-        homeView.refresh();
-      }
+      const { transfers } = await applyCommands();
+      if (applied.length) toast(`Manager approved: ${applied.join(', ')} — added to your inventory`, { duration: 5000 });
+      if (transfers.length) toast(`Stock transfer: ${transfers.join(' · ')}`, { duration: 6000 });
+      if (applied.length || transfers.length) homeView.refresh();
       for (const r of rejected) {
         toast(`Request rejected: ${r.name}${r.note ? ' — ' + r.note : ''}`, {
           error: true, actionLabel: 'OK', action: () => dismissRejected(r.id), duration: 8000,

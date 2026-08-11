@@ -119,12 +119,38 @@ export default {
         if (techId.length < 8 || techId.length > 64 || !techName) {
           return json({ error: 'techId and techName required' }, 400, cors);
         }
+        const prev = await env.DB.prepare('SELECT data FROM snapshots WHERE tech_id = ?1').bind(techId).first();
         const now = new Date().toISOString();
         await env.DB.prepare(
           `INSERT INTO snapshots (tech_id, tech_name, updated_at, data) VALUES (?1, ?2, ?3, ?4)
            ON CONFLICT(tech_id) DO UPDATE SET tech_name = ?2, updated_at = ?3, data = ?4`
         ).bind(techId, techName, now, raw).run();
-        return json({ ok: true, serverTime: now }, 200, cors);
+
+        // Alert managers about items that CROSSED into low stock since the last
+        // snapshot. Items that are new (or vans syncing for the first time)
+        // don't alert — that keeps CSV seeding and onboarding quiet.
+        let lowAlerts = 0;
+        if (prev) {
+          try {
+            const prevItems = new Map((JSON.parse(prev.data).items || []).map(i => [i.id, i]));
+            const isLow = (i) => i.qty <= i.minQty;
+            const crossed = (body.items || []).filter(i => {
+              const before = prevItems.get(i.id);
+              return isLow(i) && before && !isLow(before);
+            });
+            lowAlerts = crossed.length;
+            if (crossed.length) {
+              const names = crossed.map(i => i.name);
+              const shown = names.slice(0, 3).join(', ');
+              ctx.waitUntil(notifyManagers(env, {
+                title: `Low stock — ${techName}`,
+                body: names.length > 3 ? `${shown} + ${names.length - 3} more` : shown,
+                tag: `low-${techId}`,
+              }));
+            }
+          } catch { /* alerting must never break a sync */ }
+        }
+        return json({ ok: true, serverTime: now, lowAlerts }, 200, cors);
       }
 
       if (url.pathname === '/v1/team' && req.method === 'GET') {
@@ -233,6 +259,64 @@ export default {
           return json({ ok: true }, 200, cors);
         }
         return json({ error: 'invalid state' }, 409, cors);
+      }
+
+      /* ---------- commands (manager → tech phones; currently transfers) ---------- */
+
+      if (url.pathname === '/v1/commands' && req.method === 'POST') {
+        if (!(await isManager())) return json({ error: 'unauthorized' }, 401, cors);
+        const body = await req.json();
+        const cmds = Array.isArray(body.commands) ? body.commands : [];
+        if (!cmds.length || cmds.length > 10) return json({ error: 'commands array required' }, 400, cors);
+        const now = new Date().toISOString();
+        const stmts = [];
+        for (const c of cmds) {
+          const techId = String(c.techId || '').trim();
+          const type = String(c.type || '');
+          if (techId.length < 8 || !['transfer_out', 'transfer_in'].includes(type) || !c.payload) {
+            return json({ error: 'invalid command' }, 400, cors);
+          }
+          stmts.push(env.DB.prepare(
+            `INSERT INTO commands (id, tech_id, type, payload, status, created_at) VALUES (?1, ?2, ?3, ?4, 'pending', ?5)`
+          ).bind(crypto.randomUUID(), techId, type, JSON.stringify(c.payload), now));
+        }
+        await env.DB.batch(stmts);
+        ctx.waitUntil((async () => {
+          for (const c of cmds) {
+            const p = c.payload;
+            await notifyTech(env, c.techId, {
+              title: 'Stock transfer',
+              body: c.type === 'transfer_in'
+                ? `+${p.qty} ${p.item?.unit || ''} ${p.item?.name || 'item'} from ${p.otherTech}`
+                : `−${p.qty} ${p.item?.unit || ''} ${p.item?.name || 'item'} to ${p.otherTech}`,
+              tag: `cmd-${p.groupId || 'transfer'}`,
+            });
+          }
+        })());
+        return json({ ok: true, created: cmds.length }, 200, cors);
+      }
+
+      if (url.pathname === '/v1/commands/mine' && req.method === 'GET') {
+        if (!(await isTeam())) return json({ error: 'unauthorized' }, 401, cors);
+        const techId = url.searchParams.get('techId') || '';
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM commands WHERE tech_id = ?1 AND status = 'pending' ORDER BY created_at ASC LIMIT 50"
+        ).bind(techId).all();
+        return json({
+          ok: true,
+          commands: results.map(r => ({ id: r.id, type: r.type, payload: JSON.parse(r.payload), createdAt: r.created_at })),
+        }, 200, cors);
+      }
+
+      const cmdApplied = url.pathname.match(/^\/v1\/commands\/([\w-]{8,64})\/applied$/);
+      if (cmdApplied && req.method === 'POST') {
+        if (!(await isTeam())) return json({ error: 'unauthorized' }, 401, cors);
+        const body = await req.json().catch(() => ({}));
+        const row = await env.DB.prepare('SELECT tech_id FROM commands WHERE id = ?1').bind(cmdApplied[1]).first();
+        if (!row) return json({ error: 'not found' }, 404, cors);
+        if (String(body.techId || '') !== row.tech_id) return json({ error: 'not your command' }, 403, cors);
+        await env.DB.prepare("UPDATE commands SET status = 'applied' WHERE id = ?1").bind(cmdApplied[1]).run();
+        return json({ ok: true }, 200, cors);
       }
 
       /* ---------- push ---------- */
