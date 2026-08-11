@@ -3,9 +3,14 @@
 // plain download elsewhere.
 import { allItems, isLow } from './items.js';
 import { allTxnsDesc } from './txns.js';
-import { fmtQty, isoDate, toast } from './ui.js';
+import { fmtQty, isoDate, toast, confirmDialog } from './ui.js';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Every export button asks before a file is created. */
+export function confirmExport(what) {
+  return confirmDialog(`Create ${what}?`, { okLabel: 'Create file', title: 'Export' });
+}
 
 function stamp(ts) {
   const d = new Date(ts);
@@ -57,7 +62,7 @@ export function buildVarianceWorkbook(review) {
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 11 }];
-  XLSX.utils.book_append_sheet(wb, ws, 'Stocktake');
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventory Count');
   return wb;
 }
 
@@ -91,6 +96,7 @@ export async function deliverFile(filename, data, mime) {
 
 export async function exportInventoryXlsx() {
   if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  if (!(await confirmExport('the Excel stock report (.xlsx)'))) return 'cancelled';
   const [items, txns] = await Promise.all([allItems(), allTxnsDesc()]);
   const wb = buildInventoryWorkbook(items, txns);
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -99,9 +105,10 @@ export async function exportInventoryXlsx() {
 
 export async function exportVarianceXlsx(review) {
   if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  if (!(await confirmExport('the inventory count report (.xlsx)'))) return 'cancelled';
   const wb = buildVarianceWorkbook(review);
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  return deliverFile(`stocktake-${isoDate()}.xlsx`, buf, XLSX_MIME);
+  return deliverFile(`inventory-count-${isoDate()}.xlsx`, buf, XLSX_MIME);
 }
 
 /* ---------------- v1.1: job costing + team workbooks ---------------- */
@@ -130,6 +137,7 @@ export function buildJobCostingWorkbook(jobs, { itemCosts = new Map() } = {}) {
 
 export async function exportJobCostingXlsx(jobs, { scopeLabel = 'van', days = 90, itemCosts } = {}) {
   if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  if (!(await confirmExport('the job costing report (.xlsx)'))) return 'cancelled';
   const wb = buildJobCostingWorkbook(jobs, { itemCosts });
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return deliverFile(`jobs-${scopeLabel}-${days}d-${isoDate()}.xlsx`, buf, XLSX_MIME);
@@ -170,6 +178,7 @@ export function buildReorderWorkbook(rows, { team = false } = {}) {
 
 export async function exportReorderXlsx(rows, { team = false, scopeLabel = 'van' } = {}) {
   if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  if (!(await confirmExport('the reorder report (.xlsx)'))) return 'cancelled';
   const wb = buildReorderWorkbook(rows, { team });
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return deliverFile(`reorder-${scopeLabel}-${isoDate()}.xlsx`, buf, XLSX_MIME);
@@ -227,6 +236,7 @@ export function buildTeamWorkbook(team, { aggregate, teamTxns, teamJobs }) {
 
 export async function exportTeamXlsx(team) {
   if (typeof XLSX === 'undefined') { toast('Excel library not loaded yet — try again', { error: true }); return null; }
+  if (!(await confirmExport('the team stock workbook (.xlsx)'))) return 'cancelled';
   const { aggregateTeamItems, mergeTeamTxns, usageByJob } = await import('./analytics.js');
   const aggregate = aggregateTeamItems(team);
   const teamTxns = mergeTeamTxns(team).filter(t => t.ts >= Date.now() - 90 * 24 * 3600 * 1000);

@@ -1,8 +1,10 @@
 # Stock Tracker
 
 Personal work-inventory PWA: stock counts, barcode scanning, min-stock alerts,
-use-on-job logging, stocktake mode, Excel export. All data is stored **on the
-device** (IndexedDB) — the web host only serves the app files.
+use-on-job logging, inventory (count) mode, Excel export. Working data lives
+**on the device** (IndexedDB); since v1.5 the **master parts catalog lives in
+the Worker's D1 database**, so deleting an item from a phone never deletes it
+from the team's database.
 
 ## Run locally
 
@@ -25,6 +27,9 @@ Console helpers: `__seed()` loads sample data, `__resetAll()` wipes everything.
 3. If you added a file, add it to `ASSETS` in `sw.js`.
 4. Push/upload to the static host. Installed apps show an "Update" banner on
    next launch.
+5. If `worker/` changed, redeploy the Worker too (from `worker\`):
+   `npx wrangler@4 d1 execute stocktracker-sync --remote --file=schema.sql`
+   (schema is idempotent — safe to re-run), then `npx wrangler@4 deploy`.
 
 ## Vendor lock (do not "just update one file")
 
@@ -34,19 +39,30 @@ pinned in barcode-detector's package.json). Update them **together** or
 decoding breaks. SheetJS lives at `vendor/sheetjs/xlsx.full.min.js` (0.20.3,
 from cdn.sheetjs.com — the npm copy is stale).
 
-## Roles (v1.2)
+## Roles (v1.2, tightened in v1.5)
 
-- **Manager code** entered → full control: create items directly, Team view,
+- **Manager code** entered → full control: create/edit/delete items, Team view,
   Requests inbox (approve/reject tech item requests, optionally for the whole
-  team), team analytics.
-- **Team code only** (tech) → normal daily use, but *new items* go through a
-  request: the Add button and unknown-barcode scans open a "Request new item"
-  form; the manager decides; approved items appear on the tech's phone
-  automatically (they also pull on every app open).
+  team), team analytics, parts-catalog editing.
+- **Team code only** (tech) → **stock amounts only**: stock in/out, adjust,
+  inventory counts. No item create/edit/delete — the edit pencil and Delete
+  button are hidden; new items go through a manager request (Add button and
+  unknown-barcode scans open the request form).
 - **No codes** (solo) → the app behaves like v1.0: full local control.
 
 Note: the gate is a workflow rule enforced in the app, not a security boundary —
 snapshots are opaque to the server.
+
+## Parts catalog (v1.5)
+
+`catalog` table in D1 = the master list of parts. It is fed automatically by
+manager item creates/edits and by approved requests (server-side), plus a
+one-off Settings → Manager → "Publish all" to seed it. The **All Parts** screen
+(🗂 on Home, any phone with a code) shows every part in the database —
+including ones a tech doesn't stock — with "+ My van" to start tracking one.
+Local deletes never touch the catalog; retiring a part from the catalog is a
+separate manager action (soft delete, rows are kept). Exports ask for
+confirmation before any file is created.
 
 ## Notifications (v1.2)
 

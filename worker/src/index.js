@@ -2,6 +2,8 @@
 //
 // Sync:      POST /v1/sync (team)           GET /v1/team (manager)
 //            DELETE /v1/team/:techId (manager)
+// Catalog:   GET /v1/catalog (team or manager)
+//            PUT /v1/catalog (manager, upsert)   DELETE /v1/catalog/:id (manager, soft)
 // Requests:  POST /v1/requests (team)       GET /v1/requests/mine?techId= (team)
 //            POST /v1/requests/:id/applied  POST /v1/requests/:id/dismiss (team)
 //            GET /v1/requests (manager)     POST /v1/requests/:id/decide (manager)
@@ -173,6 +175,37 @@ export default {
         return json({ ok: true }, 200, cors);
       }
 
+      /* ---------- parts catalog (master item database) ---------- */
+
+      if (url.pathname === '/v1/catalog' && req.method === 'GET') {
+        if (!(await isManager()) && !(await isTeam())) return json({ error: 'unauthorized' }, 401, cors);
+        const { results } = await env.DB.prepare(
+          'SELECT * FROM catalog WHERE deleted = 0 ORDER BY name COLLATE NOCASE'
+        ).all();
+        return json({ ok: true, items: results.map(rowToCatalogItem) }, 200, cors);
+      }
+
+      if (url.pathname === '/v1/catalog' && req.method === 'PUT') {
+        if (!(await isManager())) return json({ error: 'unauthorized' }, 401, cors);
+        const body = await req.json();
+        const items = Array.isArray(body.items) ? body.items : [];
+        if (!items.length || items.length > 500) return json({ error: 'items array required (max 500)' }, 400, cors);
+        const now = new Date().toISOString();
+        let saved = 0;
+        for (const it of items) {
+          if (await upsertCatalogItem(env, it, now)) saved++;
+        }
+        return json({ ok: true, saved }, 200, cors);
+      }
+
+      const delCat = url.pathname.match(/^\/v1\/catalog\/([\w-]{4,64})$/);
+      if (delCat && req.method === 'DELETE') {
+        if (!(await isManager())) return json({ error: 'unauthorized' }, 401, cors);
+        await env.DB.prepare("UPDATE catalog SET deleted = 1, updated_at = ?2 WHERE id = ?1")
+          .bind(delCat[1], new Date().toISOString()).run();
+        return json({ ok: true }, 200, cors);
+      }
+
       /* ---------- item requests ---------- */
 
       if (url.pathname === '/v1/requests' && req.method === 'POST') {
@@ -236,6 +269,11 @@ export default {
             `UPDATE requests SET status = ?2, target = ?3, payload = ?4, manager_note = ?5, decided_at = ?6 WHERE id = ?1`
           ).bind(id, approve ? 'approved' : 'rejected', approve ? target : null, payload, note, new Date().toISOString()).run();
           const itemName = JSON.parse(payload).name;
+          // Approved items become part of the master catalog automatically.
+          if (approve) {
+            try { await upsertCatalogItem(env, JSON.parse(payload), new Date().toISOString()); }
+            catch { /* catalog trouble must never block a decision */ }
+          }
           ctx.waitUntil(approve && target === 'team'
             ? notifyAllTechs(env, { title: 'New stock item', body: `Added for everyone: ${itemName}`, tag: `req-${id}` })
             : notifyTech(env, row.tech_id, {
@@ -395,6 +433,58 @@ function b64ToBytes(b64) {
   const u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
   return u8;
+}
+
+function rowToCatalogItem(r) {
+  return {
+    id: r.id, name: r.name, barcode: r.barcode || '', category: r.category || '',
+    unit: r.unit || 'pcs', minQty: r.min_qty || 0,
+    cost: r.cost || undefined, notes: r.notes || '', photo: r.photo || '',
+    updatedAt: r.updated_at,
+  };
+}
+
+/**
+ * Insert or update one catalog row. Matches an existing row by id, then by
+ * barcode, then by name+unit — so the same real-world part never duplicates.
+ * A matched soft-deleted row is revived. Returns the row id, or null if the
+ * item has no usable name.
+ */
+async function upsertCatalogItem(env, it, now) {
+  const name = String(it.name || '').trim().slice(0, 120);
+  if (!name) return null;
+  const barcode = String(it.barcode || '').trim().slice(0, 64) || null;
+  const category = String(it.category || '').trim().slice(0, 60) || null;
+  const unit = String(it.unit || 'pcs').trim().slice(0, 20) || 'pcs';
+  const minQty = Number(it.minQty) || 0;
+  const cost = Number(it.cost) > 0 ? Math.round(Number(it.cost) * 100) / 100 : null;
+  const notes = String(it.notes || '').trim().slice(0, 500) || null;
+  const photo = String(it.photo || '').trim().slice(0, 80) || null;
+
+  let existing = null;
+  if (it.id) existing = await env.DB.prepare('SELECT id FROM catalog WHERE id = ?1').bind(String(it.id)).first();
+  if (!existing && barcode) {
+    existing = await env.DB.prepare('SELECT id FROM catalog WHERE barcode = ?1 AND deleted = 0').bind(barcode).first();
+  }
+  if (!existing) {
+    existing = await env.DB.prepare(
+      'SELECT id FROM catalog WHERE deleted = 0 AND name = ?1 COLLATE NOCASE AND unit = ?2'
+    ).bind(name, unit).first();
+  }
+
+  const id = existing ? existing.id : (String(it.id || '').trim() || crypto.randomUUID());
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE catalog SET name = ?2, barcode = ?3, category = ?4, unit = ?5, min_qty = ?6,
+         cost = ?7, notes = ?8, photo = ?9, deleted = 0, updated_at = ?10 WHERE id = ?1`
+    ).bind(id, name, barcode, category, unit, minQty, cost, notes, photo, now).run();
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO catalog (id, name, barcode, category, unit, min_qty, cost, notes, photo, deleted, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?10)`
+    ).bind(id, name, barcode, category, unit, minQty, cost, notes, photo, now).run();
+  }
+  return id;
 }
 
 function rowToReq(r) {

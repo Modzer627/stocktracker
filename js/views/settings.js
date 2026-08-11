@@ -71,6 +71,10 @@ async function render() {
           <div class="grow">Manager code<span class="hint">Unlocks the Team view of all vans</span></div>
           <input type="password" data-managercode value="${esc(await metaGet('managerCode', ''))}" placeholder="not set" autocomplete="off" style="width:130px;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:15px;padding:6px 10px">
         </div>
+        <div class="set-row" data-pubcat-row hidden>
+          <div class="grow">Parts catalog<span class="hint">Publish every item on this phone to the shared parts database</span></div>
+          <button class="btn btn-sm" data-pubcat>Publish all</button>
+        </div>
       </div>
 
       <div class="section-title">Notifications</div>
@@ -160,6 +164,18 @@ async function render() {
     toast(r.ok ? 'Synced' : (r.reason === 'not configured' ? 'Enter your name and team code first' : r.reason), { error: !r.ok });
     refreshSyncLine();
   });
+  // --- parts catalog seeding (manager only) ---
+  managerConfigured().then(isMgr => { if (isMgr) sec.querySelector('[data-pubcat-row]').hidden = false; });
+  sec.querySelector('[data-pubcat]').addEventListener('click', async () => {
+    const items = await dbAll('items');
+    if (!items.length) { toast('No items on this phone yet', { error: true }); return; }
+    const yes = await confirmDialog(`Publish all ${items.length} items on this phone to the shared parts catalog? Existing catalog entries with the same barcode or name are updated, nothing is deleted.`, { okLabel: 'Publish' });
+    if (!yes) return;
+    const { publishItems } = await import('../catalog.js');
+    const r = await publishItems(items);
+    toast(r.ok ? `Published ${r.count} items to the catalog` : r.reason === 'queued' ? 'Offline — will publish when back online' : 'Set your manager code first', { error: !r.ok && r.reason !== 'queued' });
+  });
+
   sec.querySelector('[data-managercode]').addEventListener('change', async (e) => {
     await metaSet('managerCode', e.target.value.trim());
     if (!e.target.value.trim()) { toast('Manager view off'); return; }

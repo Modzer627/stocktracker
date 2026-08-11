@@ -1,4 +1,4 @@
-// Scan screen. Modes: in / out / lookup, plus 'count' when opened from a stocktake.
+// Scan screen. Modes: in / out / lookup, plus 'count' when opened from an inventory.
 import { applyStockChange, metaGet, metaSet } from '../db.js';
 import { getByBarcode, getItem } from '../items.js';
 import { Scanner, scanImage } from '../scanner.js';
@@ -292,7 +292,7 @@ export default {
   async show(params = {}) {
     countMode = params.mode === 'count';
     session = countMode ? await getSession() : null;
-    if (countMode && !session) { toast('No stocktake in progress', { error: true }); nav.back(); return; }
+    if (countMode && !session) { toast('No inventory in progress', { error: true }); nav.back(); return; }
     role = (await import('../requests.js').then(m => m.appRole()).catch(() => 'solo'));
     mode = countMode ? 'in' : await metaGet('lastScanMode', 'in');
     if (!MODE_LABELS[mode]) mode = 'in';
