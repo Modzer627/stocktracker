@@ -3,9 +3,9 @@
 // app behaves exactly as before. Never blocks the UI; failures queue and retry.
 import { dbAll, metaGet, metaSet, uuid } from './db.js';
 
-// Baked-in production endpoint (set after the Worker is deployed).
-// Overridable via meta 'workerUrl' for local development.
-export const DEFAULT_WORKER_URL = 'http://localhost:8787';
+// Baked-in production endpoint. Overridable via meta 'workerUrl' for local
+// development (e.g. metaSet('workerUrl','http://localhost:8787')).
+export const DEFAULT_WORKER_URL = 'https://stocktracker-sync.modzer627.workers.dev';
 
 const AUTH_HEADER = 'X-Stock-Auth';
 const TXN_WINDOW_DAYS = 180;
