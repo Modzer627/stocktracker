@@ -7,6 +7,7 @@ import { exportInventoryXlsx } from '../export.js';
 import { exportBackup } from '../backup.js';
 import { $, esc, fmtQty, toast, sheet } from '../ui.js';
 import * as nav from '../nav.js';
+import { managerConfigured } from '../sync.js';
 import { openUseSheet, openItemForm } from './sheets.js';
 
 const section = () => document.getElementById('screen-home');
@@ -61,9 +62,12 @@ async function render() {
   const lowItems = filtered.filter(isLow);
   const banners = await bannersHTML();
 
+  const showTeam = await managerConfigured();
   sec.innerHTML = `
     <header class="hdr">
       <h1>Stock Tracker</h1>
+      <button class="icon-btn" data-insights aria-label="Insights">📈</button>
+      ${showTeam ? '<button class="icon-btn" data-team aria-label="Team">👥</button>' : ''}
       <button class="icon-btn" data-settings aria-label="Settings">⚙︎</button>
     </header>
     <div class="content">
@@ -98,6 +102,8 @@ function wire(sec, items) {
   });
 
   sec.querySelector('[data-settings]').addEventListener('click', () => nav.show('settings'));
+  sec.querySelector('[data-insights]').addEventListener('click', () => nav.show('insights'));
+  sec.querySelector('[data-team]')?.addEventListener('click', () => nav.show('team'));
   sec.querySelector('[data-scan]').addEventListener('click', () => nav.show('scan'));
   sec.querySelector('[data-add]').addEventListener('click', () => openItemForm({ onSaved: (it) => { if (it) render(); } }));
   sec.querySelector('[data-stocktake]').addEventListener('click', () => nav.show('stocktake'));

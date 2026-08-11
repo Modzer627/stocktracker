@@ -1,4 +1,4 @@
-import { uuid, round3, newTx, txDone, dbGet, dbAll, dbGetByIndex, dbPut, dbDel } from './db.js';
+import { uuid, round3, newTx, txDone, dbGet, dbAll, dbGetByIndex, dbPut, dbDel, notifyDataChanged } from './db.js';
 
 const now = () => Date.now();
 
@@ -14,6 +14,8 @@ function normalize(data) {
   };
   const barcode = (data.barcode || '').trim();
   if (barcode) item.barcode = barcode; // omitted entirely when absent → stays out of the unique index
+  const cost = parseFloat(String(data.cost ?? '').replace(',', '.'));
+  if (!Number.isNaN(cost) && cost > 0) item.cost = Math.round(cost * 100) / 100;
   return item;
 }
 
@@ -30,7 +32,7 @@ export function createItem(data) {
         delta: item.qty, type: 'in', job: null, note: 'Initial stock', ts: now(),
       });
     }
-    t.oncomplete = () => resolve(item);
+    t.oncomplete = () => { notifyDataChanged(); resolve(item); };
     t.onerror = (e) => reject(friendly((e.target && e.target.error) || t.error));
     t.onabort = () => reject(friendly(t.error));
   });
@@ -42,11 +44,13 @@ export async function updateItem(id, patch) {
   const clean = normalize({ ...existing, ...patch });
   const item = { ...existing, ...clean, id, updatedAt: now() };
   if (!('barcode' in clean)) delete item.barcode;
+  if (!('cost' in clean)) delete item.cost;
   try {
     await dbPut('items', item);
   } catch (e) {
     throw friendly(e);
   }
+  notifyDataChanged();
   return item;
 }
 
@@ -70,7 +74,7 @@ export async function allItems() {
   return items;
 }
 
-export const deleteItem = (id) => dbDel('items', id);
+export const deleteItem = async (id) => { await dbDel('items', id); notifyDataChanged(); };
 
 export const isLow = (item) => item.qty <= item.minQty;
 

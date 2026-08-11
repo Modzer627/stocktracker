@@ -287,6 +287,50 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .confirm-box { text-align: center; padding: 6px 4px 2px; }
 .confirm-box p { margin-bottom: 18px; font-size: 15.5px; line-height: 1.5; }
 
+/* ---------- insights: stat tiles ---------- */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+.tile-v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tile-v.bad { color: var(--danger); }
+.tile-l { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.35; }
+
+/* ---------- charts ---------- */
+.chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 8px 4px; overflow-x: auto; }
+.chart-wrap svg { width: 100%; height: auto; display: block; min-width: 320px; }
+.ch-fill { fill: var(--accent); }
+.ch-grid { stroke: var(--border); stroke-width: 1; }
+.ch-val { fill: var(--text); font-size: 11px; font-weight: 700; }
+.ch-tick { fill: var(--text-dim); font-size: 10px; }
+.ch-bar { cursor: pointer; }
+.chart-empty { background: var(--surface); border: 1px dashed var(--border); border-radius: 14px; padding: 18px 14px; color: var(--text-dim); font-size: 13.5px; text-align: center; }
+.ch-tooltip {
+  display: none; position: fixed; z-index: 90; pointer-events: none;
+  background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+  border-radius: 8px; padding: 6px 10px; font-size: 12.5px; box-shadow: var(--shadow);
+  max-width: 260px;
+}
+
+/* ---------- meters (top-used, per-tech) ---------- */
+.meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.meter > div { height: 100%; border-radius: 4px; background: var(--accent); min-width: 2px; }
+
+/* ---------- page tabs / mini segments ---------- */
+.seg-page { background: var(--surface-2); border: 1px solid var(--border); }
+.seg-page button { color: var(--text-dim); }
+.seg-page button.on { background: var(--accent); color: var(--accent-text); }
+.seg-mini { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 2px; flex: 0 0 auto; }
+.seg-mini button { min-height: 30px; padding: 2px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.seg-mini button.on { background: var(--accent); color: var(--accent-text); }
+
+/* ---------- usage-by-job cards ---------- */
+.job-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 0 14px; margin-bottom: 8px; }
+.job-card summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
+.job-card summary::-webkit-details-marker { display: none; }
+.job-card .job-name { font-weight: 700; font-size: 15px; }
+.job-card[open] summary { border-bottom: 1px solid var(--border); }
+.job-card .rev-row:last-child { border-bottom: none; }
+
 @media (min-width: 700px) {
   .content, .hdr, .actionbar { padding-left: max(14px, calc(50vw - 330px)); padding-right: max(14px, calc(50vw - 330px)); }
+  .tiles { grid-template-columns: repeat(4, 1fr); }
 }

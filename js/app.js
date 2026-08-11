@@ -6,9 +6,12 @@ import homeView from './views/home.js';
 import scanView from './views/scan.js';
 import itemView from './views/item.js';
 import settingsView from './views/settings.js';
+import teamView from './views/team.js';
+import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
+import { initSync } from './sync.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;
@@ -32,7 +35,11 @@ async function boot() {
   nav.register('stocktake', stocktakeView);
   nav.register('review', reviewView);
   nav.register('settings', settingsView);
+  nav.register('team', teamView);
+  nav.register('insights', insightsView);
   await nav.show('home');
+
+  initSync();
 
   // First user gesture unlocks WebAudio so scan beeps work on iOS.
   document.addEventListener('pointerdown', unlockAudio, { once: true });

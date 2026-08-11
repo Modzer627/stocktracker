@@ -1,6 +1,6 @@
 // JSON backup/restore. With local-only storage this is both the safety net and
 // the way to move the inventory between the two phones.
-import { dbAll, dbPut, dbClear, metaGet, metaSet, newTx, txDone } from './db.js';
+import { dbAll, dbPut, dbClear, metaGet, metaSet, newTx, txDone, notifyDataChanged } from './db.js';
 import { deliverFile } from './export.js';
 import { isoDate } from './ui.js';
 
@@ -84,6 +84,7 @@ export async function restoreBackup(data, mode) {
   }
   if (mode === 'replace') await metaSet('stocktake', null); // a foreign count session makes no sense here
 
+  notifyDataChanged();
   return { itemCount, txnCount, warnings };
 }
 

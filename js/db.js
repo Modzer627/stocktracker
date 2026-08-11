@@ -16,6 +16,11 @@ export function round3(n) {
   return Math.round(n * 1000) / 1000;
 }
 
+/** Fired after any inventory mutation; the team-sync module listens for it. */
+export function notifyDataChanged() {
+  try { window.dispatchEvent(new CustomEvent('stock:changed')); } catch { /* non-browser context */ }
+}
+
 function openOnce() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -154,7 +159,7 @@ export function applyStockChange({ itemId, delta, type, job = null, note = null 
         ts: Date.now(),
       });
     };
-    t.oncomplete = () => resolve(updated);
+    t.oncomplete = () => { notifyDataChanged(); resolve(updated); };
     t.onerror = (e) => reject((e.target && e.target.error) || t.error || new Error('Transaction error'));
     t.onabort = () => reject(t.error || new Error('Item not found'));
   });

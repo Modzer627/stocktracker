@@ -2,7 +2,8 @@
 import { metaGet, metaSet, dbClear, dbAll } from '../db.js';
 import { exportBackup, readBackupFile, restoreBackup, daysSinceBackup } from '../backup.js';
 import { exportInventoryXlsx } from '../export.js';
-import { esc, toast, confirmDialog, setSoundEnabled } from '../ui.js';
+import { syncStatus, pushNow, markDirty, managerConfigured, fetchTeam } from '../sync.js';
+import { esc, toast, confirmDialog, setSoundEnabled, fmtDateTime } from '../ui.js';
 import * as nav from '../nav.js';
 
 const section = () => document.getElementById('screen-settings');
@@ -48,6 +49,30 @@ async function render() {
         </div>
       </div>
 
+      <div class="section-title">Team sync</div>
+      <div class="set-group">
+        <div class="set-row">
+          <div class="grow">Your name<span class="hint">How managers see this van</span></div>
+          <input type="text" data-techname value="${esc(await metaGet('techName', ''))}" placeholder="e.g. Mike" style="width:130px;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:15px;padding:6px 10px">
+        </div>
+        <div class="set-row">
+          <div class="grow">Team code<span class="hint">From your manager — turns on syncing</span></div>
+          <input type="password" data-teamcode value="${esc(await metaGet('teamCode', ''))}" placeholder="not set" autocomplete="off" style="width:130px;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:15px;padding:6px 10px">
+        </div>
+        <div class="set-row">
+          <div class="grow"><span data-syncline>…</span><span class="hint">Pushes automatically after changes</span></div>
+          <button class="btn btn-sm" data-syncnow>Sync now</button>
+        </div>
+      </div>
+
+      <div class="section-title">Manager</div>
+      <div class="set-group">
+        <div class="set-row">
+          <div class="grow">Manager code<span class="hint">Unlocks the Team view of all vans</span></div>
+          <input type="password" data-managercode value="${esc(await metaGet('managerCode', ''))}" placeholder="not set" autocomplete="off" style="width:130px;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:15px;padding:6px 10px">
+        </div>
+      </div>
+
       <div class="section-title">Your data</div>
       <div class="set-group">
         <div class="set-row">
@@ -89,6 +114,49 @@ async function render() {
     </div>`;
 
   sec.querySelector('[data-back]').addEventListener('click', () => nav.back());
+
+  // --- team sync wiring ---
+  const refreshSyncLine = async () => {
+    const line = sec.querySelector('[data-syncline]');
+    if (!line) return;
+    const s = await syncStatus();
+    line.textContent = !s.configured ? 'Sync off — set name + team code'
+      : s.lastSyncError ? `⚠ ${s.lastSyncError}`
+      : s.pending ? 'Changes waiting to sync…'
+      : s.lastSyncAt ? `Synced ${fmtDateTime(s.lastSyncAt)}`
+      : 'Ready — will sync on next change';
+  };
+  refreshSyncLine();
+  window.removeEventListener('sync:status', window.__syncLineHandler || (() => {}));
+  window.__syncLineHandler = refreshSyncLine;
+  window.addEventListener('sync:status', window.__syncLineHandler);
+
+  sec.querySelector('[data-techname]').addEventListener('change', async (e) => {
+    await metaSet('techName', e.target.value.trim());
+    markDirty();
+    refreshSyncLine();
+  });
+  sec.querySelector('[data-teamcode]').addEventListener('change', async (e) => {
+    await metaSet('teamCode', e.target.value.trim());
+    if (e.target.value.trim()) { toast('Team sync on'); markDirty(); } else toast('Team sync off');
+    refreshSyncLine();
+  });
+  sec.querySelector('[data-syncnow]').addEventListener('click', async () => {
+    const r = await pushNow();
+    toast(r.ok ? 'Synced' : (r.reason === 'not configured' ? 'Enter your name and team code first' : r.reason), { error: !r.ok });
+    refreshSyncLine();
+  });
+  sec.querySelector('[data-managercode]').addEventListener('change', async (e) => {
+    await metaSet('managerCode', e.target.value.trim());
+    if (!e.target.value.trim()) { toast('Manager view off'); return; }
+    try {
+      await fetchTeam();
+      toast('Manager code accepted — Team view unlocked');
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
+
   sec.querySelector('[data-camera]').addEventListener('change', async (e) => {
     await metaSet('cameraFacing', e.target.value);
     toast('Default camera saved');

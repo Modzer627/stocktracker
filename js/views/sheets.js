@@ -136,10 +136,16 @@ export async function openItemForm({ item = null, prefill = {}, onSaved = null }
         <datalist id="dl-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
       </div>
     </div>
-    <div class="field">
-      <label>Location</label>
-      <input type="text" data-f="location" value="${v('location')}" list="dl-locs" autocomplete="off" placeholder="Shelf, van, bin…">
-      <datalist id="dl-locs">${locs.map(l => `<option value="${esc(l)}">`).join('')}</datalist>
+    <div class="field-row">
+      <div class="field">
+        <label>Location</label>
+        <input type="text" data-f="location" value="${v('location')}" list="dl-locs" autocomplete="off" placeholder="Shelf, van, bin…">
+        <datalist id="dl-locs">${locs.map(l => `<option value="${esc(l)}">`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label>Cost per unit ($)</label>
+        <input type="text" data-f="cost" value="${v('cost')}" inputmode="decimal" autocomplete="off" placeholder="optional">
+      </div>
     </div>
     <div class="field">
       <label>Notes</label>

@@ -1,0 +1,16 @@
+{
+  // StockTracker sync backend — Cloudflare Worker + D1.
+  // database_id is a placeholder until `wrangler d1 create stocktracker-sync`
+  // prints the real one (setup.ps1 walks through it).
+  "name": "stocktracker-sync",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stocktracker-sync",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}
