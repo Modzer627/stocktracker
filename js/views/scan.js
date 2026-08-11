@@ -128,8 +128,29 @@ function requestUnknown(code) {
   }));
 }
 
+/** Unknown barcode? The team parts database may still know it — pull it in. */
+async function pullFromCatalog(code) {
+  try {
+    const { catalogFindByBarcode, addPartToVan } = await import('../catalog.js');
+    const part = await catalogFindByBarcode(code);
+    if (!part) return null;
+    return await addPartToVan(part); // local item, qty 0
+  } catch {
+    return null;
+  }
+}
+
 async function handleCode(code) {
-  const item = await getByBarcode(code);
+  let item = await getByBarcode(code);
+
+  // Not on this phone yet, but maybe in the team parts database.
+  if (!item && mode !== 'lookup') {
+    const pulled = await pullFromCatalog(code);
+    if (pulled) {
+      item = pulled;
+      toast(`${item.name} — from the parts database`, { duration: 2200 });
+    }
+  }
 
   if (countMode) {
     if (!item) {
@@ -166,7 +187,14 @@ async function handleCode(code) {
   }
 
   if (mode === 'lookup') {
-    if (!item) { feedback(false); setChip(`No item with barcode <b>${esc(code)}</b>`); return; }
+    if (!item) {
+      const part = await import('../catalog.js').then(m => m.catalogFindByBarcode(code)).catch(() => null);
+      feedback(false);
+      setChip(part
+        ? `<b>${esc(part.name)}</b>&nbsp;— in the parts database, not in your van`
+        : `No item with barcode <b>${esc(code)}</b>`);
+      return;
+    }
     feedback(true);
     lastItem = item;
     setChip(`<b>${esc(item.name)}</b>&nbsp;· ${fmtQty(item.qty)} ${esc(item.unit)}${item.minQty ? ` · min ${fmtQty(item.minQty)}` : ''}${item.location ? ` · ${esc(item.location)}` : ''}`);

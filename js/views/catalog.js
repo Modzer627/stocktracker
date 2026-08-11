@@ -2,8 +2,9 @@
 // database. Every part the team stocks is listed — including ones this phone
 // doesn't have. Techs can pull a part into their van (stock tracking only);
 // managers can edit or retire catalog entries.
-import { fetchCatalog, cachedCatalog, removeCatalogItem, publishItems } from '../catalog.js';
-import { allItems, createItem } from '../items.js';
+import { fetchCatalog, cachedCatalog, removeCatalogItem, publishItems, addPartToVan } from '../catalog.js';
+import { allItems } from '../items.js';
+import { openItemForm } from './sheets.js';
 import { appRole } from '../requests.js';
 import { esc, fmtQty, toast, confirmDialog, sheet } from '../ui.js';
 import * as nav from '../nav.js';
@@ -77,6 +78,7 @@ async function render() {
       ${role === 'manager' ? '<div class="banner info">Tap a part to edit or retire it. Changes go to the shared database, not to anyone\'s counts.</div>' : ''}
       <div class="searchbar"><input type="search" placeholder="Search all parts…" value="${esc(query)}" data-search></div>
       ${filtered.length ? filtered.map(partRow).join('') : `<div class="empty">${items.length ? 'Nothing matches.' : 'The catalog is empty.<br>Manager items and approved requests appear here automatically.'}</div>`}
+      ${role === 'tech' ? '<button class="btn btn-block" data-reqnew style="margin-top:14px">＋ Can\'t find it? Request a new part</button>' : ''}
     </div>`;
 
   sec.querySelector('[data-back]').addEventListener('click', () => nav.back());
@@ -93,6 +95,14 @@ async function render() {
   });
 
   sec.querySelector('[data-body]').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-reqnew]')) {
+      openItemForm({
+        mode: 'request',
+        prefill: { name: query.trim(), qty: 0 },
+        onRequested: () => {},
+      });
+      return;
+    }
     const row = e.target.closest('[data-part]');
     if (!row) return;
     const part = items.find(p => p.id === row.dataset.part);
@@ -100,7 +110,7 @@ async function render() {
 
     if (e.target.closest('[data-addvan]')) {
       try {
-        await createItem({ ...part, id: undefined, qty: 0 });
+        await addPartToVan(part);
         toast(`${part.name} added to your van — set the amount you have`);
         local = await allItems();
         render();

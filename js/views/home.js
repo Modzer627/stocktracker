@@ -114,7 +114,10 @@ function wire(sec, items) {
   sec.querySelector('[data-add]').addEventListener('click', async () => {
     const { appRole } = await import('../requests.js');
     const role = await appRole();
-    openItemForm({ mode: role === 'tech' ? 'request' : 'create', onSaved: (it) => { if (it) render(); } });
+    // Techs pull parts from the manager-built database instead of typing them
+    // in; the catalog screen has a "request a new part" fallback.
+    if (role === 'tech') { nav.show('catalog'); return; }
+    openItemForm({ mode: 'create', onSaved: (it) => { if (it) render(); } });
   });
   sec.querySelector('[data-stocktake]').addEventListener('click', () => nav.show('stocktake'));
   sec.querySelector('[data-export]').addEventListener('click', openExportSheet);

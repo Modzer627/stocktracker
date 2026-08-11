@@ -1,6 +1,6 @@
 // Offline cache. DEPLOY RITUAL: bump VERSION on every deploy — it is what
 // makes phones pick up new files. Add any new file to ASSETS.
-const VERSION = 'v1.5.0';
+const VERSION = 'v1.5.1';
 const CACHE = `stocktracker-${VERSION}`;
 
 const ASSETS = [

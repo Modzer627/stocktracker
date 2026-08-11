@@ -2,6 +2,7 @@
 // is the source of truth for what parts exist — deleting an item from a phone
 // never touches it. Only managers write to it; everyone on the team can read.
 import { metaGet, metaSet } from './db.js';
+import { createItem } from './items.js';
 import { workerUrl, managerConfigured } from './sync.js';
 
 const AUTH_HEADER = 'X-Stock-Auth';
@@ -69,6 +70,29 @@ export async function flushCatalogQueue() {
   if (!q.length) return;
   await metaSet('catalogQueue', []);
   await publishItems(q); // re-queues itself if still offline
+}
+
+/**
+ * Find a part in the shared catalog by barcode — cached copy first, then the
+ * network. Returns null when there's no match or no catalog access.
+ */
+export async function catalogFindByBarcode(code) {
+  const c = String(code || '').trim();
+  if (!c || !(await catalogAvailable())) return null;
+  const cached = await cachedCatalog();
+  const hit = cached?.items?.find(p => (p.barcode || '') === c);
+  if (hit) return hit;
+  try {
+    const fresh = await fetchCatalog();
+    return fresh.items.find(p => (p.barcode || '') === c) || null;
+  } catch {
+    return null; // offline and not in cache
+  }
+}
+
+/** Start tracking a catalog part on this phone (local item, default qty 0). */
+export function addPartToVan(part, qty = 0) {
+  return createItem({ ...part, id: undefined, qty });
 }
 
 /** Manager-only: retire a part from the catalog (soft delete on the server). */

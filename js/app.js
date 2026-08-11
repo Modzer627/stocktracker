@@ -12,7 +12,7 @@ import insightsView from './views/insights.js';
 import { stocktakeView, reviewView } from './views/stocktake.js';
 import { initSync } from './sync.js';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 window.__appVersion = APP_VERSION;
 window.__updateReady = false;
 window.__installPrompt = null;

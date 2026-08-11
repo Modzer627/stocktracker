@@ -46,8 +46,10 @@ from cdn.sheetjs.com — the npm copy is stale).
   team), team analytics, parts-catalog editing.
 - **Team code only** (tech) → **stock amounts only**: stock in/out, adjust,
   inventory counts. No item create/edit/delete — the edit pencil and Delete
-  button are hidden; new items go through a manager request (Add button and
-  unknown-barcode scans open the request form).
+  button are hidden. The Add button opens the parts catalog (search → pull
+  into the van at qty 0); unknown-barcode scans pull from the catalog when the
+  barcode is known there. Genuinely new parts go through a manager request
+  (fallback button on the catalog screen, or the request form on scan).
 - **No codes** (solo) → the app behaves like v1.0: full local control.
 
 Note: the gate is a workflow rule enforced in the app, not a security boundary —
