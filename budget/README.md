@@ -41,6 +41,18 @@ Apply the schema to the local DB once: `npx wrangler@4 d1 execute budget-sync --
 
 ## First-time server setup
 
+**Easiest path — automatic via GitHub Actions:** add two repository secrets
+(repo Settings → Secrets and variables → Actions): `CLOUDFLARE_API_TOKEN`
+(a token with Workers Scripts:Edit + D1:Edit) and `HOUSEHOLD_CODE` (the
+passphrase you and your partner will share). The
+`deploy-budget-worker` workflow then creates the database, applies the
+schema, sets the secrets and deploys whenever `budget/worker/` changes on
+`main` — or run it manually from the Actions tab. Optionally also add
+`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (from `npx web-push generate-vapid-keys`)
+to enable push notifications.
+
+**Manual path** — from your own machine:
+
 ```
 cd budget/worker
 npm install

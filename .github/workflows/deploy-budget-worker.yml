@@ -1,0 +1,74 @@
+# Deploys the budget-sync Cloudflare Worker automatically.
+#
+# One-time setup (repo Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  required — token with Workers Scripts:Edit + D1:Edit
+#   HOUSEHOLD_CODE        required — the passphrase you and your partner share
+#   VAPID_PUBLIC_KEY      optional — enables push notifications
+#   VAPID_PRIVATE_KEY     optional — (generate both with: npx web-push generate-vapid-keys)
+#
+# Runs when budget/worker changes on main, or manually from the Actions tab.
+# Creates the D1 database on first run, applies the (idempotent) schema,
+# deploys the worker, then updates its secrets.
+name: Deploy budget worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'budget/worker/**'
+      - '.github/workflows/deploy-budget-worker.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: budget/worker
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create D1 database if missing, wire its id into the config
+        run: |
+          set -e
+          if ! npx wrangler@4 d1 info budget-sync > /dev/null 2>&1; then
+            npx wrangler@4 d1 create budget-sync
+          fi
+          DB_ID=$(npx wrangler@4 d1 info budget-sync --json | jq -r '.uuid')
+          echo "D1 database id: $DB_ID"
+          sed -i "s/REPLACE_WITH_D1_DATABASE_ID/$DB_ID/" wrangler.jsonc
+
+      - name: Apply schema (idempotent)
+        run: npx wrangler@4 d1 execute budget-sync --remote --file=schema.sql -y
+
+      - name: Deploy worker
+        run: npx wrangler@4 deploy
+
+      - name: Set worker secrets
+        run: |
+          set -e
+          if [ -n "${{ secrets.HOUSEHOLD_CODE }}" ]; then
+            printf '%s' "${{ secrets.HOUSEHOLD_CODE }}" | npx wrangler@4 secret put HOUSEHOLD_CODE
+          else
+            echo "::warning::HOUSEHOLD_CODE secret not set — the worker will reject all requests until it is"
+          fi
+          if [ -n "${{ secrets.VAPID_PUBLIC_KEY }}" ] && [ -n "${{ secrets.VAPID_PRIVATE_KEY }}" ]; then
+            printf '%s' "${{ secrets.VAPID_PUBLIC_KEY }}" | npx wrangler@4 secret put VAPID_PUBLIC_KEY
+            printf '%s' "${{ secrets.VAPID_PRIVATE_KEY }}" | npx wrangler@4 secret put VAPID_PRIVATE_KEY
+          else
+            echo "Push notification keys not set — skipping (the app works fine without them)"
+          fi
+
+      - name: Health check
+        run: |
+          sleep 5
+          curl -sf https://budget-sync.modzer627.workers.dev/v1/health
