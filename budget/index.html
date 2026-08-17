@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Household Budget</title>
+  <meta name="description" content="Shared household budget: receipt capture, recurring bills and subscriptions, category budgets, partner sync.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f5f9">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1017">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Budget">
+  <link rel="stylesheet" href="./css/app.css">
+  <script defer src="../vendor/sheetjs/xlsx.full.min.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <section id="screen-home" class="screen"></section>
+    <section id="screen-txns" class="screen" hidden></section>
+    <section id="screen-recurring" class="screen" hidden></section>
+    <section id="screen-goals" class="screen" hidden></section>
+    <section id="screen-settings" class="screen" hidden></section>
+  </div>
+  <div id="sheet-root"></div>
+  <div id="toast-root"></div>
+  <noscript><p style="padding:2rem">Household Budget needs JavaScript enabled.</p></noscript>
+</body>
+</html>

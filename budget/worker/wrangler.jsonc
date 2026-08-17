@@ -1,0 +1,19 @@
+{
+  // Budget sync backend — Cloudflare Worker + D1.
+  // database_id is a placeholder until `wrangler d1 create budget-sync`
+  // prints the real one (see budget section of the repo README).
+  "name": "budget-sync",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "budget-sync",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  // Daily bill-due reminder push, 13:00 UTC ≈ morning in US time zones.
+  "triggers": { "crons": ["0 13 * * *"] }
+}
