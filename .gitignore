@@ -1,3 +1,6 @@
 worker/.wrangler/
 worker/node_modules/
 .DS_Store
+budget/worker/.wrangler/
+budget/worker/node_modules/
+budget/worker/.dev.vars
