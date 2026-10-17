@@ -1,0 +1,17 @@
+{
+  // Parts Checkout backend — Cloudflare Worker + D1. Standalone: shares nothing
+  // with the other Workers in this repo.
+  // database_id is a placeholder until `npx wrangler@4 d1 create parts-checkout`
+  // prints the real one (see ../README.md).
+  "name": "parts-checkout",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parts-checkout",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}

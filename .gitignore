@@ -4,3 +4,6 @@ worker/node_modules/
 budget/worker/.wrangler/
 budget/worker/node_modules/
 budget/worker/.dev.vars
+checkout/worker/.wrangler/
+checkout/worker/node_modules/
+checkout/worker/.dev.vars

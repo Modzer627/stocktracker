@@ -91,3 +91,11 @@ category budgets and its own sync Worker (`budget/worker/`, deployed
 separately as `budget-sync`). It reuses this app's architecture but shares no
 runtime state with it; see `budget/README.md` for setup and its own deploy
 ritual.
+
+## Parts Checkout app
+
+A third standalone app lives at **[`checkout/`](checkout/README.md)**: the web
+replacement for the parts-room sign-out Microsoft Form. Techs scan a QR code to
+take, return or request parts; the parts manager gets the week already added up
+per tech and per part. It has its own Worker (`parts-checkout`) and D1 database
+and shares no code or data with the stock tracker.

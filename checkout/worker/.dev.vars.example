@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local development (never commit .dev.vars).
+TEAM_KEY=dev-team-key
+MANAGER_PIN=1234
